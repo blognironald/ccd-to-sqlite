@@ -27,9 +27,9 @@ This project is an experiment in **parsing and database management**, but ultima
 ---
 
 ## ⚙️ Requirements
-- [Haskell](https://www.haskell.org/)
-- [SQLite](https://www.sqlite.org/)  
-- [Cabal](https://www.haskell.org/cabal/)
-- [Chinese Character Decomposition](https://commons.wikimedia.org/wiki/Commons:Chinese_characters_decomposition/)
+- [Haskell](https://www.haskell.org)
+- [SQLite](https://www.sqlite.org) 
+- [Cabal](https://www.haskell.org/cabal)
+- [Chinese Character Decomposition](https://commons.wikimedia.org/wiki/Commons:Chinese_characters_decomposition)
 
 ---
