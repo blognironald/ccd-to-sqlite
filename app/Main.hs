@@ -3,6 +3,7 @@ module Main where
 import CmdLineArgs
 import Options.Applicative
 import CcdParser
+import CcdSql
 import Data.Char
 import System.Exit(die)
 
@@ -17,7 +18,7 @@ main = do
             result <- runCcdParser $ input args
             case result of
                 Left err -> die err
-                Right rows -> return ()
+                Right rows -> do
+                    runCcdSql (output args) rows
         _     -> putStrLn $ "\nUnidentified operation: " ++ operation args ++ "\n"
-
-
+    putStrLn "Done!"

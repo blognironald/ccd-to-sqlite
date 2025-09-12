@@ -124,6 +124,7 @@ parseAsCharacter  = do
     _ <- eof
     return result
 
+runCcdParser :: String -> IO (Either String [Character])
 runCcdParser input = do
     result <- runParser parseAsCharacter input <$> T.readFile input
     case result of
