@@ -1,16 +1,21 @@
 module Main where
 
-import CmdLineArgs
 import Options.Applicative
-import CcdParser
-import CcdSql
 import Data.Char
 import System.Exit(die)
+-- import qualified Data.Text.IO as T
+import Data.Maybe
+
+import CmdLineArgs
+import CcdParser
+import CcdSql
 import CharToTagParser
-import qualified Data.Text.IO as T
+import CharToTagSql
 
 -- import System.Environment (withArgs)
 -- withArgs ["--op", "ccd", "-iothers/ccd.txt", "-oothers/ccd.db3"] main
+-- withArgs ["--op", "tag", "-iothers/n5.txt", "-oothers/ccd.db3", "-tn5"] main
+-- withArgs ["--op", "tag", "-iothers/hsk1.txt", "-oothers/ccd.db3", "-thsk1"] main
 
 main :: IO ()
 main = do
@@ -27,6 +32,7 @@ main = do
             case result of
                 Left err -> die err
                 Right chars -> do
-                    mapM_ T.putStr chars
+                    -- mapM_ T.putStr chars
+                    runCharToTagSql (output args) chars (fromMaybe "!" (tag args))
         _     -> putStrLn $ "\nUnidentified operation: " ++ operation args ++ "\n"
     putStrLn "\nDone!"

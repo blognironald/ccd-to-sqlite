@@ -67,6 +67,7 @@ executable ccd-to-sqlite
                     , CcdParser
                     , CcdSql
                     , CharToTagParser
+                    , CharToTagSql
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

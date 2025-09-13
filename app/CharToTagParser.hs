@@ -6,9 +6,9 @@ import Data.Void ( Void )
 import Text.Megaparsec.Char
 import Text.Megaparsec
 
-type CharToTag = T.Text
+type CharToTag = Text
 
-type Parser = Parsec Void T.Text
+type Parser = Parsec Void Text
 
 pCharToTag :: Parser CharToTag
 pCharToTag = singleton <$> (letterChar <* space)
@@ -24,4 +24,4 @@ runCharToTagParser input = do
     result <- runParser parseAsCharToTag input <$> T.readFile input
     case result of
         Left  err  -> return $ Left (errorBundlePretty err)
-        Right rows -> return $ Right rows
+        Right chars -> return $ Right chars

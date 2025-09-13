@@ -6,6 +6,7 @@ data Args = Args
   { operation   :: String
   , input       :: String
   , output      :: String 
+  , tag         :: Maybe String
   }
 
 -- Parser for arguments
@@ -28,6 +29,11 @@ argsParser = Args
          <> showDefault
          <> value "out.db3"
          <> help "Path to output sqlite db" )
+      <*> optional (strOption
+          ( long "tag"
+         <> short 't'
+         <> metavar "TAG"
+         <> help "Tag name" ))
 
 -- Program info
 opts :: ParserInfo Args
