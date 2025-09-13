@@ -66,6 +66,7 @@ executable ccd-to-sqlite
     other-modules:    CmdLineArgs
                     , CcdParser
                     , CcdSql
+                    , CharToTagParser
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
