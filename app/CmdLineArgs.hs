@@ -25,10 +25,10 @@ argsParser = Args
       <*> strOption
           ( long "output"
          <> short 'o'
-         <> metavar "DB"
+         <> metavar "FILE_OR_DB"
          <> showDefault
-         <> value "out.db3"
-         <> help "Path to output sqlite db" )
+         <> value "a.out"
+         <> help "Path to output file or db" )
       <*> optional (strOption
           ( long "tag"
          <> short 't'

@@ -68,6 +68,7 @@ executable ccd-to-sqlite
                     , CcdSql
                     , CharToTagParser
                     , CharToTagSql
+                    , ComponentsFromCharacter
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -78,6 +79,8 @@ executable ccd-to-sqlite
                     , megaparsec
                     , text
                     , sqlite-simple
+                    , containers
+                    , pretty-tree
 
     -- Directories containing source files.
     hs-source-dirs:   app
