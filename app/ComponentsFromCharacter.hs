@@ -6,6 +6,8 @@ import Database.SQLite.Simple
 import Data.Tree
 import Data.Tree.Pretty
 
+import qualified Data.Set as Set
+
 data CharTreeElem = CharTreeElem {
       character  :: T.Text
     , leftChars  :: [CharTreeElem]
@@ -40,7 +42,7 @@ buildTree conn inputChar = do
   }
 
 
-queryCharacter :: String -> T.Text -> IO [T.Text]
+queryCharacter :: DbName -> T.Text -> IO [T.Text]
 queryCharacter dbName char_ = do
     db <- open dbName
     results <- query db getQuery [char_, T.pack "0"] :: IO [Only T.Text]
@@ -53,7 +55,7 @@ queryCharacter dbName char_ = do
 
 -- Convert CharTreeElem to Tree String for pretty printing
 toTree :: CharTreeElem -> Tree String
-toTree elem_ = Node (T.unpack $ character elem_) 
+toTree elem_ = Node (T.unpack $ character elem_)
     (map toTree (leftChars elem_) ++ map toTree (rightChars elem_))
 
 -- Helper function to pretty print a CharTreeElem
@@ -61,11 +63,28 @@ prettyPrintTree :: CharTreeElem -> String
 prettyPrintTree = drawVerticalTreeWith 10 . toTree
 
 -- Example usage in callBuildTree
-callBuildTree :: String -> T.Text -> IO CharTreeElem
+type DbName = String
+callBuildTree :: DbName -> T.Text -> IO [T.Text]
 callBuildTree dbName char_ = do
   db <- open dbName
   tree <- buildTree db char_
-  putStrLn $ prettyPrintTree tree  -- Optional: add this line to print the tree
-  mapM_ T.putStr (postOrderTraversal tree) >> putStrLn ""
-  
-  return tree
+  return $ postOrderTraversal tree
+  -- tree <- buildTree db char_
+  -- putStrLn $ prettyPrintTree tree 
+  -- mapM_ T.putStr (postOrderTraversal tree) >> putStrLn ""
+  -- return tree
+
+multiple :: DbName -> [T.Text] -> IO [T.Text]
+multiple dbName chars = do
+  list <- mapM (callBuildTree dbName) chars
+  let result = removeDups (concat list)
+  mapM_ T.putStr result
+  return result
+
+removeDups :: [T.Text] -> [T.Text]
+removeDups chars = go chars (Set.fromList []) []
+  where
+    go [] _ result = result
+    go (c:cs) charsSet result
+      | Set.member c charsSet = go cs charsSet                result
+      | otherwise             = go cs (Set.insert c charsSet) (result ++ [c])
