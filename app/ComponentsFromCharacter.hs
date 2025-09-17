@@ -78,7 +78,7 @@ multiple :: DbName -> [T.Text] -> IO [T.Text]
 multiple dbName chars = do
   list <- mapM (callBuildTree dbName) chars
   let result = removeDups (concat list)
-  mapM_ T.putStr result
+  -- mapM_ T.putStr result
   return result
 
 removeDups :: [T.Text] -> [T.Text]

@@ -69,6 +69,7 @@ executable ccd-to-sqlite
                     , CharToTagParser
                     , CharToTagSql
                     , ComponentsFromCharacter
+                    , GenerateN5Characters
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
