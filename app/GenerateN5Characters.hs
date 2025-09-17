@@ -5,7 +5,7 @@ import qualified Data.Text.IO as T
 import Database.SQLite.Simple
  
 import ComponentsFromCharacter as C
-import Data.Text.IO (putStrLn)
+-- import Data.Text.IO (putStrLn)
 
 queryN5 :: Query
 queryN5 = Query (T.pack "\
@@ -14,8 +14,9 @@ queryN5 = Query (T.pack "\
     \WHERE tag = 'hsk1';\
     \")
 
+getN5Components :: String -> IO ()
 getN5Components dbName = do
     db <- open dbName
     n5Chars <- query_ db queryN5 :: IO [Only T.Text]
     n5Components <- C.multiple dbName (map fromOnly n5Chars)
-    mapM_ T.putStr n5Components >> putStrLn ""
+    mapM_ T.putStr n5Components >> Prelude.putStrLn ""
