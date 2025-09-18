@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module JMdictParser where
 
@@ -8,7 +7,7 @@ import Text.XML.Cursor
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Data.Maybe 
+import Data.Maybe
 -- import Control.Monad (guard)
 -- import Data.List (find)
 
@@ -18,7 +17,6 @@ data JMdictEntry = JMdictEntry
   , kanjiElements :: ![KanjiElement]    -- ^ Kanji headwords
   , readingElements :: ![ReadingElement] -- ^ Kana readings
   , senses :: ![Sense]                  -- ^ Meanings and translations
-  , examples :: ![Example]              -- ^ Example sentences (from _examp version)
   } deriving (Show, Eq)
 
 -- | Kanji element (headword with kanji)
@@ -44,10 +42,12 @@ data Sense = Sense
   , antonyms :: ![Text]                 -- ^ Antonym references
   , partOfSpeech :: ![Text]             -- ^ Parts of speech
   , fields :: ![Text]                   -- ^ Field of application
-  , miscInfo :: ![Text]                 -- ^ Miscellaneous information
+  , miscInfo :: ![Text]                 -- ^ Miscellaneous information\
+  , languageSources :: ![LanguageSource]-- ^ Source language information
   , dialectInfo :: ![Text]              -- ^ Dialect information
   , glosses :: ![Gloss]                 -- ^ Translation glosses
-  , languageSources :: ![LanguageSource] -- ^ Source language information
+  , senseInfo :: ![Text]                -- ^ Sense information
+  , example :: ![Example]             -- ^ Examples
   } deriving (Show, Eq)
 
 -- | Translation gloss
@@ -70,7 +70,8 @@ data LanguageSource = LanguageSource
 data Example = Example
   { exampleJapanese :: !Text            -- ^ Japanese sentence
   , exampleEnglish :: !Text             -- ^ English translation
-  , exampleSource :: !(Maybe Text)     -- ^ Source reference
+  , exampleSourceType :: !Text          -- ^ Seq Num from the Tatoeba Project
+  , exampleSource :: !Text              -- ^ Source reference
   } deriving (Show, Eq)
 
 -- | Parse JMdict_e_examp XML file
@@ -92,7 +93,6 @@ parseEntry cursor = JMdictEntry
   , kanjiElements = parseKanjiElements cursor
   , readingElements = parseReadingElements cursor
   , senses = parseSenses cursor
-  , examples = parseExamples cursor
   }
 
 -- | Parse entry sequence number
@@ -143,7 +143,9 @@ parseSense cursor = Sense
   , miscInfo = getMultipleContent cursor "misc"
   , dialectInfo = getMultipleContent cursor "dial"
   , glosses = parseGlosses cursor
+  , senseInfo = getMultipleContent cursor "s_inf"
   , languageSources = parseLanguageSources cursor
+  , example = parseExamples cursor
   }
 
 -- | Parse gloss elements
@@ -166,7 +168,7 @@ parseLanguageSources cursor =
 
 parseLanguageSource :: Cursor -> LanguageSource
 parseLanguageSource cursor = LanguageSource
-  { lsLang = fromMaybe "eng" $ listToMaybe $ cursor $| attribute "xml:lang"
+  { lsLang = fromMaybe "eng" $ listToMaybe $ cursor $| attribute xmlLang
   , lsType = listToMaybe $ cursor $| attribute "ls_type"
   , lsWasei = "y" `elem` (cursor $| attribute "ls_wasei")
   , lsText = case cursor $/ content of
@@ -181,26 +183,33 @@ parseExamples cursor =
 
 parseExample :: Cursor -> Example
 parseExample cursor = Example
-  { exampleJapanese = getFirstContent cursor "ex_sent"
-  , exampleEnglish = getFirstContent cursor "ex_sent"
-  , exampleSource = case getMultipleContent cursor "ex_srce" of
-                     [] -> Nothing
-                     (x:_) -> Just x
+  { exampleJapanese = getLanguageExample cursor "jpn"
+  , exampleEnglish = getLanguageExample cursor "eng"
+  , exampleSource = getFirstContent cursor "ex_srce"
+  , exampleSourceType = fromMaybe "" $ listToMaybe (cursor $/ attribute "exsrc_type")
   }
 
 -- Helper functions
+xmlLang :: Name
+xmlLang = Name "lang" (Just "http://www.w3.org/XML/1998/namespace") (Just "xml")
+
+getLanguageExample :: Cursor -> Text -> Text
+getLanguageExample cursor lang =
+  case cursor $// element "ex_sent" >=> attributeIs xmlLang lang of
+    (c:_) -> T.concat $ c $/ content
+    [] -> ""
 
 -- | Get first content of an element
 getFirstContent :: Cursor -> Name -> Text
-getFirstContent cursor elementName =
-  case cursor $/ element elementName &/ content of
+getFirstContent cursor elementName' =
+  case cursor $/ element elementName' &/ content of
     (text:_) -> text
     [] -> ""
 
 -- | Get all content of elements with the same name
 getMultipleContent :: Cursor -> Name -> [Text]
-getMultipleContent cursor elementName =
-  cursor $/ element elementName &/ content
+getMultipleContent cursor elementName' =
+  cursor $/ element elementName' &/ content
 
 -- | Search for entries by kanji or reading
 searchEntries :: Text -> [JMdictEntry] -> [JMdictEntry]
@@ -225,15 +234,28 @@ prettyPrintEntry entry = T.unlines
   , "Kanji: " <> T.intercalate ", " (map kanjiText $ kanjiElements entry)
   , "Reading: " <> T.intercalate ", " (map readingText $ readingElements entry)
   , "Meanings: " <> T.intercalate "; " (getEnglishGlosses entry)
-  , "Examples: " <> T.pack (show $ length $ examples entry) <> " sentences"
-  , ""
-  ]
+  , "Examples:"
+  ] <> prettyPrintExamples (senses entry)
+  where
+    prettyPrintExamples [] = "  No examples available\n"
+    prettyPrintExamples ss = T.unlines $ map formatExample ss
+
+    formatExample sense = case example sense of
+      [] -> "  No examples available\n"
+      exs -> T.unlines $ map formatSingleExample exs
+
+    formatSingleExample ex = T.unlines
+      [ "  Japanese: " <> exampleJapanese ex
+      , "  English:  " <> exampleEnglish ex
+      , "  Source:   " <> exampleSource ex
+      , ""
+      ]
 
 -- Example usage function
 exampleUsage :: IO ()
 exampleUsage = do
   -- Parse the JMdict_e_examp file
-  entries <- parseJMdictFile "JMdict_e_examp"
+  entries <- parseJMdictFile "others\\JMdict_e_examp"
 
   putStrLn $ "Loaded " ++ show (length entries) ++ " entries"
 
@@ -243,7 +265,3 @@ exampleUsage = do
 
   -- Print first few entries
   mapM_ (T.putStr . prettyPrintEntry) (take 3 waterEntries)
-
-  -- Show entries with examples
-  let entriesWithExamples = filter (not . null . examples) entries
-  putStrLn $ show (length entriesWithExamples) ++ " entries have example sentences"
