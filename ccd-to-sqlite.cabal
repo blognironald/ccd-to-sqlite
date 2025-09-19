@@ -71,6 +71,7 @@ executable ccd-to-sqlite
                     , ComponentsFromCharacter
                     , GenerateN5Characters
                     , JMdictParser
+                    , KanjiDic2Parser 
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
