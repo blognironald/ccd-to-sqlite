@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use list comprehension" #-}
 
 module KanjiDic2Parser where
 
@@ -272,6 +274,7 @@ main = do
       T.putStrLn $ T.pack "First character: " <> cLiteral c
       T.putStrLn $ T.pack "Stroke count: " <> T.pack (show (mStrokeCount . cMisc $ c))
     [] -> T.putStrLn "No characters found"
+  T.putStrLn $ prettyPrintCharacter (Prelude.head (kdCharacters kanjiDic2))
 
 -- Utility functions for querying parsed data
 findKanjiByLiteral :: Text -> KanjiDic2 -> Maybe Character
@@ -294,3 +297,127 @@ findKanjiByLiteral literal kd =
 --   case cReadingMeaning char of
 --     Just rm -> T.concatMap (T.map mValue . rmgMeanings) (rmGroups rm)
 --     Nothing -> ""
+
+-- Pretty printing function for Character
+prettyPrintCharacter :: Character -> Text
+prettyPrintCharacter char = T.unlines $
+  [ "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  , "KANJI: " <> cLiteral char
+  , "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  ] ++ prettyCodepoints (cCodepoint char)
+    ++ prettyRadicals (cRadical char)
+    ++ prettyMisc (cMisc char)
+    ++ prettyDicNumbers (cDicNumber char)
+    ++ prettyQueryCodes (cQueryCode char)
+    ++ prettyReadingMeaning (cReadingMeaning char)
+
+-- Helper functions for pretty printing each section
+prettyCodepoints :: [Codepoint] -> [Text]
+prettyCodepoints [] = []
+prettyCodepoints cps =
+  ["", "📄 CODEPOINTS:"] ++
+  Prelude.map (\cp -> "  " <> cpType cp <> ": " <> cpValue cp) cps
+
+prettyRadicals :: [Radical] -> [Text]
+prettyRadicals [] = []
+prettyRadicals rads =
+  ["", "🔤 RADICALS:"] ++
+  Prelude.map (\rad -> "  " <> radType rad <> ": " <> T.pack (show (radValue rad))) rads
+
+prettyMisc :: Misc -> [Text]
+prettyMisc misc =
+  ["", "📊 MISCELLANEOUS:"] <>
+  maybeToList (fmap (\g -> "  Grade: " <> T.pack (show g)) (mGrade misc)) <>
+  (if Prelude.null (mStrokeCount misc) then []
+   else ["  Stroke Count: " <> T.intercalate ", " (fmap (T.pack . show) (mStrokeCount misc))]
+  ) <>
+  (if Prelude.null (mVariant misc) then []
+   else ["  Variants:"] <> fmap (\v -> "    " <> vType v <> ": " <> vValue v) (mVariant misc)
+  ) <>
+  maybeToList (fmap (\f -> "  Frequency: " <> T.pack (show f)) (mFreq misc)) <>
+  (if Prelude.null (mRadName misc) then []
+   else ["  Radical Names: " <> T.intercalate ", " (mRadName misc)]) <>
+  maybeToList (fmap (\j -> "  JLPT Level: " <> T.pack (show j)) (mJlpt misc))
+
+prettyDicNumbers :: [DicNumber] -> [Text]
+prettyDicNumbers [] = []
+prettyDicNumbers dns =
+  ["", "📚 DICTIONARY REFERENCES:"] ++
+  fmap formatDicNumber dns
+  where
+    formatDicNumber dn =
+      let base = "  " <> dnType dn <> ": " <> dnValue dn
+          vol = maybe "" (\v -> " (vol: " <> v <> ")") (dnVolume dn)
+          page = maybe "" (\p -> " (page: " <> p <> ")") (dnPage dn)
+      in base <> vol <> page
+
+prettyQueryCodes :: [QueryCode] -> [Text]
+prettyQueryCodes [] = []
+prettyQueryCodes qcs =
+  ["", "🔍 QUERY CODES:"] ++
+  fmap formatQueryCode qcs
+  where
+    formatQueryCode qc =
+      let base = "  " <> qcType qc <> ": " <> qcValue qc
+          misclass = maybe "" (\m -> " (misclass: " <> m <> ")") (qcSkipMisclass qc)
+      in base <> misclass
+
+prettyReadingMeaning :: Maybe ReadingMeaning -> [Text]
+prettyReadingMeaning Nothing = []
+prettyReadingMeaning (Just rm) =
+  ["", "📖 READINGS & MEANINGS:"] ++
+  Prelude.concatMap prettyRMGroup (rmGroups rm) ++
+  (if Prelude.null (rmNanori rm) then []
+   else ["", "  👤 NANORI (name readings):"] ++
+        fmap ("    " <>) (rmNanori rm))
+
+prettyRMGroup :: RMGroup -> [Text]
+prettyRMGroup group =
+  let readings = rmgReadings group
+      meanings = rmgMeanings group
+      onReadings = Prelude.filter (\r -> rType r == "ja_on") readings
+      kunReadings = Prelude.filter (\r -> rType r == "ja_kun") readings
+      otherReadings = Prelude.filter (\r -> rType r /= "ja_on" && rType r /= "ja_kun") readings
+      englishMeanings = Prelude.filter (\m -> mLang m == Nothing || mLang m == Just "en") meanings
+      otherMeanings = Prelude.filter (\m -> mLang m /= Nothing && mLang m /= Just "en") meanings
+  in
+  (if Prelude.null onReadings then []
+   else ["", "  🔸 ON readings (音読み):"] ++
+        fmap formatReading onReadings) ++
+  (if Prelude.null kunReadings then []
+   else ["", "  🔹 KUN readings (訓読み):"] ++
+        fmap formatReading kunReadings) ++
+  (if Prelude.null otherReadings then []
+   else ["", "  📝 Other readings:"] ++
+        fmap formatReading otherReadings) ++
+  (if Prelude.null englishMeanings then []
+   else ["", "  🇺🇸 English meanings:"] ++
+        ["    " <> T.intercalate ", " (fmap mValue englishMeanings)]) ++
+  (if Prelude.null otherMeanings then []
+   else ["", "  🌐 Other language meanings:"] ++
+        fmap formatMeaning otherMeanings)
+
+formatReading :: Reading -> Text
+formatReading r =
+  let base = "    " <> rValue r
+      onType = maybe "" (\ot -> " [" <> ot <> "]") (rOnType r)
+      status = maybe "" (\st -> " (" <> st <> ")") (rRStatus r)
+  in base <> onType <> status
+
+formatMeaning :: Meaning -> Text
+formatMeaning m =
+  let lang = maybe "??" id (mLang m)
+  in "    [" <> lang <> "] " <> mValue m
+
+-- Convenience function to print a character to stdout
+printCharacter :: Character -> IO ()
+printCharacter = T.putStrLn . prettyPrintCharacter
+
+-- Example usage function
+exampleUsage :: KanjiDic2 -> IO ()
+exampleUsage kd = do
+  case findKanjiByLiteral "水" kd of
+    Just char -> do
+      T.putStrLn "Found kanji 水:"
+      printCharacter char
+    Nothing -> T.putStrLn "Kanji not found"
