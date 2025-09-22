@@ -1,6 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Use list comprehension" #-}
 
 module KanjiDic2Parser where
 
@@ -11,6 +9,7 @@ import Data.Text.IO as T
 import Data.Maybe
 import Text.Read
 import qualified Data.Text.Read as T
+import Data.List
 
 -- Data types representing KANJIDIC2 structure
 data KanjiDic2 = KanjiDic2
@@ -279,7 +278,7 @@ mainParser = do
 -- Utility functions for querying parsed data
 findKanjiByLiteral :: Text -> KanjiDic2 -> Maybe Character
 findKanjiByLiteral literal kd =
-  listToMaybe $ Prelude.filter (\c -> cLiteral c == literal) (kdCharacters kd)
+  Data.List.find (\c -> cLiteral c == literal) (kdCharacters kd)
 
 -- getKunReadings :: Character -> [Text]
 -- getKunReadings char =
@@ -328,15 +327,13 @@ prettyMisc :: Misc -> [Text]
 prettyMisc misc =
   ["", "📊 MISCELLANEOUS:"] <>
   maybeToList (fmap (\g -> "  Grade: " <> T.pack (show g)) (mGrade misc)) <>
-  (if Prelude.null (mStrokeCount misc) then []
-   else ["  Stroke Count: " <> T.intercalate ", " (fmap (T.pack . show) (mStrokeCount misc))]
+  (["  Stroke Count: " <> T.intercalate ", " (fmap (T.pack . show) (mStrokeCount misc)) | not (Prelude.null (mStrokeCount misc))]
   ) <>
   (if Prelude.null (mVariant misc) then []
    else ["  Variants:"] <> fmap (\v -> "    " <> vType v <> ": " <> vValue v) (mVariant misc)
   ) <>
   maybeToList (fmap (\f -> "  Frequency: " <> T.pack (show f)) (mFreq misc)) <>
-  (if Prelude.null (mRadName misc) then []
-   else ["  Radical Names: " <> T.intercalate ", " (mRadName misc)]) <>
+  (["  Radical Names: " <> T.intercalate ", " (mRadName misc) | not (Prelude.null (mRadName misc))]) <>
   maybeToList (fmap (\j -> "  JLPT Level: " <> T.pack (show j)) (mJlpt misc))
 
 prettyDicNumbers :: [DicNumber] -> [Text]
@@ -372,14 +369,14 @@ prettyReadingMeaning (Just rm) =
         fmap ("    " <>) (rmNanori rm))
 
 prettyRMGroup :: RMGroup -> [Text]
-prettyRMGroup group =
-  let readings = rmgReadings group
-      meanings = rmgMeanings group
+prettyRMGroup group' =
+  let readings = rmgReadings group'
+      meanings = rmgMeanings group'
       onReadings = Prelude.filter (\r -> rType r == "ja_on") readings
       kunReadings = Prelude.filter (\r -> rType r == "ja_kun") readings
       otherReadings = Prelude.filter (\r -> rType r /= "ja_on" && rType r /= "ja_kun") readings
-      englishMeanings = Prelude.filter (\m -> mLang m == Nothing || mLang m == Just "en") meanings
-      otherMeanings = Prelude.filter (\m -> mLang m /= Nothing && mLang m /= Just "en") meanings
+      englishMeanings = Prelude.filter (\m -> isNothing (mLang m) || mLang m == Just "en") meanings
+      otherMeanings = Prelude.filter (\m -> isJust (mLang m) && mLang m /= Just "en") meanings
   in
   (if Prelude.null onReadings then []
    else ["", "  🔸 ON readings (音読み):"] ++
@@ -406,7 +403,7 @@ formatReading r =
 
 formatMeaning :: Meaning -> Text
 formatMeaning m =
-  let lang = maybe "??" id (mLang m)
+  let lang = fromMaybe "??" (mLang m)
   in "    [" <> lang <> "] " <> mValue m
 
 -- Convenience function to print a character to stdout

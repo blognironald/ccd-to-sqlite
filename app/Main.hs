@@ -5,7 +5,6 @@ import Data.Char
 import System.Exit(die)
 -- import qualified Data.Text.IO as T
 import Data.Maybe
-import Database.SQLite.Simple
 
 import CmdLineArgs
 import CcdParser
