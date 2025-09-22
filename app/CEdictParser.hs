@@ -72,7 +72,7 @@ parseCedictLine :: Parser CedictEntry
 parseCedictLine = do
   skipComments
   entry <- parseCedictEntry
-  _ <- eol <|> (eof >> return '\n')
+  void eol <|> eof
   return entry
 
 -- Skip comment lines (starting with #) and empty lines
@@ -85,7 +85,7 @@ skipComments = skipMany (commentLine <|> emptyLine)
       return ()
     emptyLine = do
       _ <- some (char ' ' <|> char '\t')
-      _ <- eol <|> (eof >> return '\n')
+      void eol <|> eof
       return ()
 
 -- Convenience functions for parsing from different sources
@@ -176,7 +176,7 @@ parseRobustCedictFile = do
     parseRobustLine = choice
       [ [] <$ skipCommentLine
       , [] <$ skipEmptyLine
-      , (:[]) <$> parseCedictEntry <* (eol <|> (eof >> return '\n'))
+      , (:[]) <$> parseCedictEntry <* (void eol <|> eof)
       ]
     
     skipCommentLine = do
@@ -186,7 +186,7 @@ parseRobustCedictFile = do
     
     skipEmptyLine = do
       _ <- many (char ' ' <|> char '\t')
-      _ <- eol <|> (eof >> return '\n')
+      void eol <|> eof
       return ()
 
 -- Robust file parser function
