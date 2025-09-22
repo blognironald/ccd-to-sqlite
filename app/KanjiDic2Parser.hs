@@ -264,8 +264,8 @@ readIntMaybe text
       Left _ -> Nothing
 
 -- Usage example
-main :: IO ()
-main = do
+mainParser :: IO ()
+mainParser = do
   kanjiDic2 <- parseKanjiDic2 "others\\kanjidic2.xml"
   T.putStrLn $ T.pack "Parsed " <> T.pack (show (Prelude.length (kdCharacters kanjiDic2))) <> T.pack " characters"
 -- Print first character as example
