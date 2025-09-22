@@ -3,14 +3,15 @@
 module KanjiDic2Sql where
 
 import Database.SQLite.Simple
-import Data.Text (Text)
+import Database.SQLite.Simple.ToField
+import Database.SQLite.Simple.FromField
+import Data.Text 
 import qualified Data.Text as T
-import Data.Maybe (fromMaybe, listToMaybe)
-import Control.Monad (void, forM_)
+import Data.Maybe (fromMaybe, listToMaybe, maybeToList)
+import Control.Monad (void, forM_, forM, when)
 import Control.Exception (bracket)
 
 import KanjiDic2Parser
-
 
 -- Connection operations
 type ConnectionPath = String
@@ -19,7 +20,7 @@ type ConnectionPath = String
 createTables :: Connection -> IO ()
 createTables db = do
   -- Characters table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS characters ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "literal TEXT NOT NULL UNIQUE,"
@@ -30,7 +31,7 @@ createTables db = do
     ]
   
   -- Codepoints table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS codepoints ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "character_id INTEGER NOT NULL,"
@@ -41,7 +42,7 @@ createTables db = do
     ]
   
   -- Radicals table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS radicals ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "character_id INTEGER NOT NULL,"
@@ -52,7 +53,7 @@ createTables db = do
     ]
   
   -- Stroke counts table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS stroke_counts ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "character_id INTEGER NOT NULL,"
@@ -62,7 +63,7 @@ createTables db = do
     ]
   
   -- Variants table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS variants ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "character_id INTEGER NOT NULL,"
@@ -73,7 +74,7 @@ createTables db = do
     ]
   
   -- Radical names table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS radical_names ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "character_id INTEGER NOT NULL,"
@@ -83,7 +84,7 @@ createTables db = do
     ]
   
   -- Dictionary numbers table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS dic_numbers ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "character_id INTEGER NOT NULL,"
@@ -96,7 +97,7 @@ createTables db = do
     ]
   
   -- Query codes table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS query_codes ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "character_id INTEGER NOT NULL,"
@@ -108,7 +109,7 @@ createTables db = do
     ]
   
   -- Reading-Meaning groups table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS rm_groups ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "character_id INTEGER NOT NULL,"
@@ -118,7 +119,7 @@ createTables db = do
     ]
   
   -- Readings table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS readings ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "rm_group_id INTEGER NOT NULL,"
@@ -131,7 +132,7 @@ createTables db = do
     ]
   
   -- Meanings table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS meanings ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "rm_group_id INTEGER NOT NULL,"
@@ -142,7 +143,7 @@ createTables db = do
     ]
   
   -- Nanori table
-  exec db $ T.unwords
+  execute_ db $ Query $ T.unwords
     [ "CREATE TABLE IF NOT EXISTS nanori ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "character_id INTEGER NOT NULL,"
@@ -156,179 +157,104 @@ createTables db = do
 
 createIndexes :: Connection -> IO ()
 createIndexes db = do
-  exec db "CREATE INDEX IF NOT EXISTS idx_characters_literal ON characters(literal);"
-  exec db "CREATE INDEX IF NOT EXISTS idx_characters_grade ON characters(grade);"
-  exec db "CREATE INDEX IF NOT EXISTS idx_characters_freq ON characters(freq);"
-  exec db "CREATE INDEX IF NOT EXISTS idx_characters_jlpt ON characters(jlpt);"
-  exec db "CREATE INDEX IF NOT EXISTS idx_codepoints_character_id ON codepoints(character_id);"
-  exec db "CREATE INDEX IF NOT EXISTS idx_codepoints_type ON codepoints(cp_type);"
-  exec db "CREATE INDEX IF NOT EXISTS idx_radicals_character_id ON radicals(character_id);"
-  exec db "CREATE INDEX IF NOT EXISTS idx_readings_rm_group_id ON readings(rm_group_id);"
-  exec db "CREATE INDEX IF NOT EXISTS idx_readings_type ON readings(r_type);"
-  exec db "CREATE INDEX IF NOT EXISTS idx_meanings_rm_group_id ON meanings(rm_group_id);"
-  exec db "CREATE INDEX IF NOT EXISTS idx_meanings_lang ON meanings(m_lang);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_characters_literal ON characters(literal);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_characters_grade ON characters(grade);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_characters_freq ON characters(freq);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_characters_jlpt ON characters(jlpt);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_codepoints_character_id ON codepoints(character_id);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_codepoints_type ON codepoints(cp_type);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_radicals_character_id ON radicals(character_id);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_readings_rm_group_id ON readings(rm_group_id);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_readings_type ON readings(r_type);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_meanings_rm_group_id ON meanings(rm_group_id);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_meanings_lang ON meanings(m_lang);"
 
 -- Insert a character and return its ID
 insertCharacter :: Connection -> Character -> IO Int
 insertCharacter db char = do
   let misc = cMisc char
   
-  stmt <- prepare db $ T.unwords
-    [ "INSERT INTO characters (literal, grade, freq, jlpt)"
-    , "VALUES (?, ?, ?, ?);"
-    ]
+  execute db "INSERT INTO characters (literal, grade, freq, jlpt) VALUES (?, ?, ?, ?)"
+    (cLiteral char, mGrade misc, mFreq misc, mJlpt misc)
   
-  bind stmt [SQLText (cLiteral char)]
-  bindNamed stmt [":2" := mGrade misc, ":3" := mFreq misc, ":4" := mJlpt misc]
-  
-  void $ step stmt
-  finalize stmt
-  lastInsertRowId db
+  fromIntegral <$> lastInsertRowId db
 
 -- Insert codepoints for a character
 insertCodepoints :: Connection -> Int -> [Codepoint] -> IO ()
 insertCodepoints db charId codepoints = do
-  stmt <- prepare db "INSERT INTO codepoints (character_id, cp_type, cp_value) VALUES (?, ?, ?);"
-  
   forM_ codepoints $ \cp -> do
-    reset stmt
-    bind stmt [SQLInteger charId, SQLText (cpType cp), SQLText (cpValue cp)]
-    void $ step stmt
-  
-  finalize stmt
+    execute db "INSERT INTO codepoints (character_id, cp_type, cp_value) VALUES (?, ?, ?)"
+      (charId, cpType cp, cpValue cp)
 
 -- Insert radicals for a character
 insertRadicals :: Connection -> Int -> [Radical] -> IO ()
 insertRadicals db charId radicals = do
-  stmt <- prepare db "INSERT INTO radicals (character_id, rad_type, rad_value) VALUES (?, ?, ?);"
-  
   forM_ radicals $ \rad -> do
-    reset stmt
-    bind stmt [SQLInteger charId, SQLText (radType rad), SQLInteger (fromIntegral $ radValue rad)]
-    void $ step stmt
-  
-  finalize stmt
+    execute db "INSERT INTO radicals (character_id, rad_type, rad_value) VALUES (?, ?, ?)"
+      (charId, radType rad, radValue rad)
 
 -- Insert stroke counts for a character
 insertStrokeCounts :: Connection -> Int -> [Int] -> IO ()
 insertStrokeCounts db charId strokeCounts = do
-  stmt <- prepare db "INSERT INTO stroke_counts (character_id, stroke_count) VALUES (?, ?);"
-  
   forM_ strokeCounts $ \sc -> do
-    reset stmt
-    bind stmt [SQLInteger charId, SQLInteger (fromIntegral sc)]
-    void $ step stmt
-  
-  finalize stmt
+    execute db "INSERT INTO stroke_counts (character_id, stroke_count) VALUES (?, ?)"
+      (charId, sc)
 
 -- Insert variants for a character
 insertVariants :: Connection -> Int -> [Variant] -> IO ()
 insertVariants db charId variants = do
-  stmt <- prepare db "INSERT INTO variants (character_id, var_type, var_value) VALUES (?, ?, ?);"
-  
   forM_ variants $ \var -> do
-    reset stmt
-    bind stmt [SQLInteger charId, SQLText (vType var), SQLText (vValue var)]
-    void $ step stmt
-  
-  finalize stmt
+    execute db "INSERT INTO variants (character_id, var_type, var_value) VALUES (?, ?, ?)"
+      (charId, vType var, vValue var)
 
 -- Insert radical names for a character
 insertRadicalNames :: Connection -> Int -> [Text] -> IO ()
 insertRadicalNames db charId radNames = do
-  stmt <- prepare db "INSERT INTO radical_names (character_id, rad_name) VALUES (?, ?);"
-  
   forM_ radNames $ \rn -> do
-    reset stmt
-    bind stmt [SQLInteger charId, SQLText rn]
-    void $ step stmt
-  
-  finalize stmt
+    execute db "INSERT INTO radical_names (character_id, rad_name) VALUES (?, ?)"
+      (charId, rn)
 
 -- Insert dictionary numbers for a character
 insertDicNumbers :: Connection -> Int -> [DicNumber] -> IO ()
 insertDicNumbers db charId dicNumbers = do
-  stmt <- prepare db $ T.unwords
-    [ "INSERT INTO dic_numbers (character_id, dr_type, dr_value, m_vol, m_page)"
-    , "VALUES (?, ?, ?, ?, ?);"
-    ]
-  
   forM_ dicNumbers $ \dn -> do
-    reset stmt
-    bind stmt [SQLInteger charId, SQLText (dnType dn), SQLText (dnValue dn)]
-    bindNamed stmt [":4" := dnVolume dn, ":5" := dnPage dn]
-    void $ step stmt
-  
-  finalize stmt
+    execute db "INSERT INTO dic_numbers (character_id, dr_type, dr_value, m_vol, m_page) VALUES (?, ?, ?, ?, ?)"
+      (charId, dnType dn, dnValue dn, dnVolume dn, dnPage dn)
 
 -- Insert query codes for a character
 insertQueryCodes :: Connection -> Int -> [QueryCode] -> IO ()
 insertQueryCodes db charId queryCodes = do
-  stmt <- prepare db $ T.unwords
-    [ "INSERT INTO query_codes (character_id, qc_type, qc_value, skip_misclass)"
-    , "VALUES (?, ?, ?, ?);"
-    ]
-  
   forM_ queryCodes $ \qc -> do
-    reset stmt
-    bind stmt [SQLInteger charId, SQLText (qcType qc), SQLText (qcValue qc)]
-    bindNamed stmt [":4" := qcSkipMisclass qc]
-    void $ step stmt
-  
-  finalize stmt
+    execute db "INSERT INTO query_codes (character_id, qc_type, qc_value, skip_misclass) VALUES (?, ?, ?, ?)"
+      (charId, qcType qc, qcValue qc, qcSkipMisclass qc)
 
 -- Insert reading-meaning group and return its ID
 insertRMGroup :: Connection -> Int -> Int -> IO Int
 insertRMGroup db charId groupOrder = do
-  stmt <- prepare db "INSERT INTO rm_groups (character_id, group_order) VALUES (?, ?);"
-  bind stmt [SQLInteger charId, SQLInteger (fromIntegral groupOrder)]
-  void $ step stmt
-  finalize stmt
-  lastInsertRowId db
+  execute db "INSERT INTO rm_groups (character_id, group_order) VALUES (?, ?)"
+    (charId, groupOrder)
+  fromIntegral <$> lastInsertRowId db
 
 -- Insert readings for a reading-meaning group
 insertReadings :: Connection -> Int -> [Reading] -> IO ()
 insertReadings db rmGroupId readings = do
-  stmt <- prepare db $ T.unwords
-    [ "INSERT INTO readings (rm_group_id, r_type, r_value, on_type, r_status)"
-    , "VALUES (?, ?, ?, ?, ?);"
-    ]
-  
   forM_ readings $ \r -> do
-    reset stmt
-    bind stmt [SQLInteger rmGroupId, SQLText (rType r), SQLText (rValue r)]
-    bindNamed stmt [":4" := rOnType r, ":5" := rRStatus r]
-    void $ step stmt
-  
-  finalize stmt
+    execute db "INSERT INTO readings (rm_group_id, r_type, r_value, on_type, r_status) VALUES (?, ?, ?, ?, ?)"
+      (rmGroupId, rType r, rValue r, rOnType r, rRStatus r)
 
 -- Insert meanings for a reading-meaning group
 insertMeanings :: Connection -> Int -> [Meaning] -> IO ()
 insertMeanings db rmGroupId meanings = do
-  stmt <- prepare db $ T.unwords
-    [ "INSERT INTO meanings (rm_group_id, m_lang, m_value)"
-    , "VALUES (?, ?, ?);"
-    ]
-  
   forM_ meanings $ \m -> do
-    reset stmt
-    bind stmt [SQLInteger rmGroupId]
-    bindNamed stmt [":2" := mLang m, ":3" := SQLText (mValue m)]
-    void $ step stmt
-  
-  finalize stmt
+    execute db "INSERT INTO meanings (rm_group_id, m_lang, m_value) VALUES (?, ?, ?)"
+      (rmGroupId, mLang m, mValue m)
 
 -- Insert nanori readings for a character
 insertNanori :: Connection -> Int -> [Text] -> IO ()
 insertNanori db charId nanoriList = do
-  stmt <- prepare db "INSERT INTO nanori (character_id, nanori_value) VALUES (?, ?);"
-  
   forM_ nanoriList $ \n -> do
-    reset stmt
-    bind stmt [SQLInteger charId, SQLText n]
-    void $ step stmt
-  
-  finalize stmt
+    execute db "INSERT INTO nanori (character_id, nanori_value) VALUES (?, ?)"
+      (charId, n)
 
 -- Insert complete character with all related data
 insertCompleteCharacter :: Connection -> Character -> IO ()
@@ -356,7 +282,7 @@ insertCompleteCharacter db char = do
       insertNanori db charId (rmNanori rm)
       
       -- Insert reading-meaning groups
-      forM_ (zip [0..] (rmGroups rm)) $ \(groupOrder, rmGroup) -> do
+      forM_ (Prelude.zip [0..] (rmGroups rm)) $ \(groupOrder, rmGroup) -> do
         rmGroupId <- insertRMGroup db charId groupOrder
         insertReadings db rmGroupId (rmgReadings rmGroup)
         insertMeanings db rmGroupId (rmgMeanings rmGroup)
@@ -366,34 +292,19 @@ insertCompleteCharacter db char = do
 -- Find character by literal
 findCharacterByLiteral :: Connection -> Text -> IO (Maybe Character)
 findCharacterByLiteral db literal = do
-  stmt <- prepare db "SELECT id FROM characters WHERE literal = ? LIMIT 1;"
-  bind stmt [SQLText literal]
-  result <- step stmt
-  
-  case result of
-    Row -> do
-      charId <- column stmt 0
-      finalize stmt
-      case charId of
-        SQLInteger cid -> Just <$> reconstructCharacter db cid
-        _ -> return Nothing
-    Done -> do
-      finalize stmt
-      return Nothing
+  results <- query db "SELECT id FROM characters WHERE literal = ? LIMIT 1" (Only literal)
+  case results of
+    [Only charId] -> Just <$> reconstructCharacter db charId
+    [] -> return Nothing
+    _ -> return Nothing
 
--- Reconstruct character from Connection
+-- Reconstruct character from database
 reconstructCharacter :: Connection -> Int -> IO Character
 reconstructCharacter db charId = do
   -- Get basic character info
-  stmt <- prepare db "SELECT literal, grade, freq, jlpt FROM characters WHERE id = ?;"
-  bind stmt [SQLInteger charId]
-  void $ step stmt
-  
-  literal <- column stmt 0
-  grade <- column stmt 1
-  freq <- column stmt 2
-  jlpt <- column stmt 3
-  finalize stmt
+  [(literal, grade, freq, jlpt)] <- query db 
+    "SELECT literal, grade, freq, jlpt FROM characters WHERE id = ?" 
+    (Only charId)
   
   -- Get all related data
   codepoints <- getCodepoints db charId
@@ -406,16 +317,16 @@ reconstructCharacter db charId = do
   readingMeaning <- getReadingMeaning db charId
   
   let misc = Misc
-        { mGrade = sqlToMaybe grade
+        { mGrade = grade
         , mStrokeCount = strokeCounts
         , mVariant = variants
-        , mFreq = sqlToMaybe freq
+        , mFreq = freq
         , mRadName = radNames
-        , mJlpt = sqlToMaybe jlpt
+        , mJlpt = jlpt
         }
   
   return Character
-    { cLiteral = sqlToText literal
+    { cLiteral = literal
     , cCodepoint = codepoints
     , cRadical = radicals
     , cMisc = misc
@@ -424,90 +335,122 @@ reconstructCharacter db charId = do
     , cReadingMeaning = readingMeaning
     }
 
--- Helper functions for reconstruction (simplified implementations)
+-- Helper functions for reconstruction
 getCodepoints :: Connection -> Int -> IO [Codepoint]
 getCodepoints db charId = do
-  stmt <- prepare db "SELECT cp_type, cp_value FROM codepoints WHERE character_id = ?;"
-  bind stmt [SQLInteger charId]
-  results <- collectRows stmt []
-  finalize stmt
-  return results
-  where
-    collectRows stmt acc = do
-      result <- step stmt
-      case result of
-        Row -> do
-          cpType <- column stmt 0
-          cpValue <- column stmt 1
-          let cp = Codepoint (sqlToText cpType) (sqlToText cpValue)
-          collectRows stmt (cp : acc)
-        Done -> return (reverse acc)
+  rows <- query db "SELECT cp_type, cp_value FROM codepoints WHERE character_id = ?" (Only charId)
+  return [Codepoint cpType cpValue | (cpType, cpValue) <- rows]
 
 getRadicals :: Connection -> Int -> IO [Radical]
 getRadicals db charId = do
-  stmt <- prepare db "SELECT rad_type, rad_value FROM radicals WHERE character_id = ?;"
-  bind stmt [SQLInteger charId]
-  results <- collectRows stmt []
-  finalize stmt
-  return results
-  where
-    collectRows stmt acc = do
-      result <- step stmt
-      case result of
-        Row -> do
-          radType <- column stmt 0
-          radValue <- column stmt 1
-          let rad = Radical (sqlToText radType) (sqlToInt radValue)
-          collectRows stmt (rad : acc)
-        Done -> return (reverse acc)
+  rows <- query db "SELECT rad_type, rad_value FROM radicals WHERE character_id = ?" (Only charId)
+  return [Radical radType radValue | (radType, radValue) <- rows]
 
--- Similar helper functions would be implemented for other data types...
--- (Omitted for brevity, but following the same pattern)
-
--- Stub implementations for remaining helper functions
 getStrokeCounts :: Connection -> Int -> IO [Int]
-getStrokeCounts _ _ = return []
+getStrokeCounts db charId = do
+  rows <- query db "SELECT stroke_count FROM stroke_counts WHERE character_id = ?" (Only charId)
+  return [sc | Only sc <- rows]
 
 getVariants :: Connection -> Int -> IO [Variant]
-getVariants _ _ = return []
+getVariants db charId = do
+  rows <- query db "SELECT var_type, var_value FROM variants WHERE character_id = ?" (Only charId)
+  return [Variant varType varValue | (varType, varValue) <- rows]
 
 getRadicalNames :: Connection -> Int -> IO [Text]
-getRadicalNames _ _ = return []
+getRadicalNames db charId = do
+  rows <- query db "SELECT rad_name FROM radical_names WHERE character_id = ?" (Only charId)
+  return [rn | Only rn <- rows]
 
 getDicNumbers :: Connection -> Int -> IO [DicNumber]
-getDicNumbers _ _ = return []
+getDicNumbers db charId = do
+  rows <- query db "SELECT dr_type, dr_value, m_vol, m_page FROM dic_numbers WHERE character_id = ?" (Only charId)
+  return [DicNumber drType drValue mVol mPage | (drType, drValue, mVol, mPage) <- rows]
 
 getQueryCodes :: Connection -> Int -> IO [QueryCode]
-getQueryCodes _ _ = return []
+getQueryCodes db charId = do
+  rows <- query db "SELECT qc_type, qc_value, skip_misclass FROM query_codes WHERE character_id = ?" (Only charId)
+  return [QueryCode qcType qcValue skipMisclass | (qcType, qcValue, skipMisclass) <- rows]
 
 getReadingMeaning :: Connection -> Int -> IO (Maybe ReadingMeaning)
-getReadingMeaning _ _ = return Nothing
+getReadingMeaning db charId = do
+  -- Get nanori readings
+  nanoriRows <- query db "SELECT nanori_value FROM nanori WHERE character_id = ?" (Only charId)
+  let nanoriList = [n | Only n <- nanoriRows]
+  
+  -- Get reading-meaning groups
+  rmGroupRows <- query db "SELECT id, group_order FROM rm_groups WHERE character_id = ? ORDER BY group_order" (Only charId) :: IO [(Int, Int)]
+  
+  if Prelude.null rmGroupRows && Prelude.null nanoriList
+    then return Nothing
+    else do
+      groups <- forM rmGroupRows $ \(rmGroupId, _groupOrder) -> do
+        readings <- getReadings db rmGroupId
+        meanings <- getMeanings db rmGroupId
+        return $ RMGroup readings meanings
+      
+      return $ Just $ ReadingMeaning groups nanoriList
 
--- Utility functions
-sqlToText :: SQLData -> Text
-sqlToText (SQLText t) = t
-sqlToText _ = ""
+getReadings :: Connection -> Int -> IO [Reading]
+getReadings db rmGroupId = do
+  rows <- query db "SELECT r_type, r_value, on_type, r_status FROM readings WHERE rm_group_id = ?" (Only rmGroupId)
+  return [Reading rType rValue onType rStatus | (rType, rValue, onType, rStatus) <- rows]
 
-sqlToInt :: SQLData -> Int
-sqlToInt (SQLInteger i) = fromIntegral i
-sqlToInt _ = 0
+getMeanings :: Connection -> Int -> IO [Meaning]
+getMeanings db rmGroupId = do
+  rows <- query db "SELECT m_lang, m_value FROM meanings WHERE rm_group_id = ?" (Only rmGroupId)
+  return [Meaning mLang mValue | (mLang, mValue) <- rows]
 
-sqlToMaybe :: SQLData -> Maybe Int
-sqlToMaybe (SQLInteger i) = Just (fromIntegral i)
-sqlToMaybe SQLNull = Nothing
-sqlToMaybe _ = Nothing
-
--- Connection initialization and usage
+-- Connection initialization
 initializeConnection :: ConnectionPath -> IO Connection
 initializeConnection dbPath = do
-  db <- open (T.pack dbPath)
+  db <- open dbPath
   createTables db
   return db
 
--- Example usage
-exampleUsage :: IO ()
-exampleUsage = do
-  db <- initializeConnection "kanjidic2.db"
+-- Batch operations
+insertKanjiDic2 :: Connection -> KanjiDic2 -> IO ()
+insertKanjiDic2 db kd = do
+  putStrLn $ "Inserting " ++ show (Prelude.length (kdCharacters kd)) ++ " characters..."
+  
+  -- Use transaction for better performance
+  execute_ db "BEGIN TRANSACTION;"
+  
+  forM_ (Prelude.zip [1..] (kdCharacters kd)) $ \(i, char) -> do
+    insertCompleteCharacter db char
+    when (i `mod` 1000 == 0) $ 
+      putStrLn $ "Inserted " ++ show i ++ " characters..."
+  
+  execute_ db "COMMIT;"
+  putStrLn "All characters inserted successfully!"
+
+-- Query helper functions
+getCharactersByGrade :: Connection -> Int -> IO [Character]
+getCharactersByGrade db grade = do
+  charIds <- query db "SELECT id FROM characters WHERE grade = ?" (Only grade)
+  mapM (reconstructCharacter db) [charId | Only charId <- charIds]
+
+getCharactersByJLPT :: Connection -> Int -> IO [Character]
+getCharactersByJLPT db jlpt = do
+  charIds <- query db "SELECT id FROM characters WHERE jlpt = ?" (Only jlpt)
+  mapM (reconstructCharacter db) [charId | Only charId <- charIds]
+
+searchCharactersByMeaning :: Connection -> Text -> IO [Character]
+searchCharactersByMeaning db meaningText = do
+  charIds <- 
+    query db 
+      (Query $ T.unwords 
+        [ "SELECT DISTINCT c.id FROM characters c"
+        , "JOIN rm_groups rg ON c.id = rg.character_id"
+        , "JOIN meanings m ON rg.id = m.rm_group_id"
+        , "WHERE m.m_value LIKE ?"
+        ])
+      (Only $ "%" <> meaningText <> "%")
+  mapM (reconstructCharacter db) [charId | Only charId <- charIds]
+
+-- Example usage and testing
+exampleUsageSql :: IO ()
+exampleUsageSql = do
+  db <- initializeConnection "others\\exampleKanjiDic2.db"
   
   -- Create example character (水 - water)
   let waterChar = Character
@@ -547,11 +490,14 @@ exampleUsage = do
   -- Query it back
   result <- findCharacterByLiteral db "水"
   case result of
-    Just char -> putStrLn $ "Found character: " ++ T.unpack (cLiteral char)
+    Just char -> do
+      putStrLn $ "Found character: " ++ T.unpack (cLiteral char)
+      putStrLn $ "Grade: " ++ show (mGrade . cMisc $ char)
+      putStrLn $ "Stroke count: " ++ show (mStrokeCount . cMisc $ char)
     Nothing -> putStrLn "Character not found"
   
   close db
 
 -- Main function for testing
-main :: IO ()
-main = exampleUsage
+mainSql :: IO ()
+mainSql = exampleUsageSql
