@@ -73,6 +73,7 @@ executable ccd-to-sqlite
                     , JMdictParser
                     , KanjiDic2Parser
                     , KanjiDic2Sql
+                    , CEdictParser
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
