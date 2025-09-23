@@ -3,13 +3,9 @@
 module KanjiDic2Sql where
 
 import Database.SQLite.Simple
-import Database.SQLite.Simple.ToField
-import Database.SQLite.Simple.FromField
 import Data.Text 
 import qualified Data.Text as T
-import Data.Maybe (fromMaybe, listToMaybe, maybeToList)
-import Control.Monad (void, forM_, forM, when)
-import Control.Exception (bracket)
+import Control.Monad 
 
 import KanjiDic2Parser
 
@@ -339,12 +335,12 @@ reconstructCharacter db charId = do
 getCodepoints :: Connection -> Int -> IO [Codepoint]
 getCodepoints db charId = do
   rows <- query db "SELECT cp_type, cp_value FROM codepoints WHERE character_id = ?" (Only charId)
-  return [Codepoint cpType cpValue | (cpType, cpValue) <- rows]
+  return [Codepoint t v | (t, v) <- rows]
 
 getRadicals :: Connection -> Int -> IO [Radical]
 getRadicals db charId = do
   rows <- query db "SELECT rad_type, rad_value FROM radicals WHERE character_id = ?" (Only charId)
-  return [Radical radType radValue | (radType, radValue) <- rows]
+  return [Radical t v | (t, v) <- rows]
 
 getStrokeCounts :: Connection -> Int -> IO [Int]
 getStrokeCounts db charId = do
@@ -369,7 +365,7 @@ getDicNumbers db charId = do
 getQueryCodes :: Connection -> Int -> IO [QueryCode]
 getQueryCodes db charId = do
   rows <- query db "SELECT qc_type, qc_value, skip_misclass FROM query_codes WHERE character_id = ?" (Only charId)
-  return [QueryCode qcType qcValue skipMisclass | (qcType, qcValue, skipMisclass) <- rows]
+  return [QueryCode t v skipMisclass | (t, v, skipMisclass) <- rows]
 
 getReadingMeaning :: Connection -> Int -> IO (Maybe ReadingMeaning)
 getReadingMeaning db charId = do
@@ -393,12 +389,12 @@ getReadingMeaning db charId = do
 getReadings :: Connection -> Int -> IO [Reading]
 getReadings db rmGroupId = do
   rows <- query db "SELECT r_type, r_value, on_type, r_status FROM readings WHERE rm_group_id = ?" (Only rmGroupId)
-  return [Reading rType rValue onType rStatus | (rType, rValue, onType, rStatus) <- rows]
+  return [Reading t v onType rStatus | (t, v, onType, rStatus) <- rows]
 
 getMeanings :: Connection -> Int -> IO [Meaning]
 getMeanings db rmGroupId = do
   rows <- query db "SELECT m_lang, m_value FROM meanings WHERE rm_group_id = ?" (Only rmGroupId)
-  return [Meaning mLang mValue | (mLang, mValue) <- rows]
+  return [Meaning l v | (l, v) <- rows]
 
 -- Connection initialization
 initializeConnection :: ConnectionPath -> IO Connection
@@ -415,7 +411,7 @@ insertKanjiDic2 db kd = do
   -- Use transaction for better performance
   execute_ db "BEGIN TRANSACTION;"
   
-  forM_ (Prelude.zip [1..] (kdCharacters kd)) $ \(i, char) -> do
+  forM_ (Prelude.zip ([1..]::[Int]) (kdCharacters kd)) $ \(i, char) -> do
     insertCompleteCharacter db char
     when (i `mod` 1000 == 0) $ 
       putStrLn $ "Inserted " ++ show i ++ " characters..."

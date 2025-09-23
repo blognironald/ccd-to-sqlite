@@ -4,7 +4,6 @@ module CEdictParser where
 
 import Text.Megaparsec
 import Text.Megaparsec.Char
-import qualified Text.Megaparsec.Char.Lexer as L
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -31,8 +30,7 @@ parseCedictEntry = do
   space1
   pronunciation <- parsePronunciation
   space1
-  meanings <- parseMeanings
-  return $ CedictEntry traditional simplified pronunciation meanings
+  CedictEntry traditional simplified pronunciation <$> parseMeanings
 
 -- Parse Chinese characters (until whitespace)
 parseChineseText :: Parser Text
@@ -44,8 +42,7 @@ parseChineseText = T.pack <$> some (satisfy (not . isSpace))
 parsePronunciation :: Parser Text
 parsePronunciation = do
   _ <- char '['
-  pronunciation <- T.pack <$> manyTill anySingle (char ']')
-  return pronunciation
+  T.pack <$> manyTill anySingle (char ']')
 
 -- Parse meanings between forward slashes /meaning1/meaning2/.../
 parseMeanings :: Parser [Text]
@@ -150,18 +147,18 @@ mainCEdictParser = do
         , "河粉 河粉 [he2 fen3] /hor fun, a type of wide, flat rice noodle/"
         , "河蚌 河蚌 [he2 bang4] /mussels/bivalves grown in rivers and lakes/"
         ]
-  
+
   case parseCedictLinesFromText sampleData of
     Left err -> putStrLn $ "Parse error: " ++ errorBundlePretty err
     Right entries -> do
       putStrLn $ "Successfully parsed " ++ show (length entries) ++ " entries:"
       T.putStrLn $ prettyPrintEntries entries
-      
+
       -- Demonstrate query functions
       putStrLn "=== Query Examples ==="
       putStrLn "Entries with '河童':"
       T.putStrLn $ prettyPrintEntries $ findByTraditional "河童" entries
-      
+
       putStrLn "Entries containing 'water':"
       T.putStrLn $ prettyPrintEntries $ findByMeaning "water" entries
 
@@ -178,12 +175,12 @@ parseRobustCedictFile = do
       , [] <$ skipEmptyLine
       , (:[]) <$> parseCedictEntry <* (void eol <|> eof)
       ]
-    
+
     skipCommentLine = do
       _ <- char '#'
       _ <- manyTill anySingle (void eol <|> eof)
       return ()
-    
+
     skipEmptyLine = do
       _ <- many (char ' ' <|> char '\t')
       void eol <|> eof

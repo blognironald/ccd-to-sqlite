@@ -1,7 +1,6 @@
 module ComponentsFromCharacter where
 
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import Database.SQLite.Simple
 import Data.Tree
 import Data.Tree.Pretty
