@@ -11,7 +11,7 @@ queryN5 :: Query
 queryN5 = Query (T.pack "\
     \SELECT character \
     \from TAGS \
-    \WHERE tag = 'hsk1';\
+    \WHERE tag = 'n5';\
     \")
 
 getN5Components :: String -> IO ()

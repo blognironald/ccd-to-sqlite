@@ -73,6 +73,12 @@ callBuildTree dbName char_ = do
   -- mapM_ T.putStr (postOrderTraversal tree) >> putStrLn ""
   -- return tree
 
+p :: String -> IO ()
+p char_ = do
+  db <- open "others//ccd.db3"
+  tree <- buildTree db (T.pack char_)
+  putStrLn $ prettyPrintTree tree 
+
 multiple :: DbName -> [T.Text] -> IO [T.Text]
 multiple dbName chars = do
   list <- mapM (callBuildTree dbName) chars
