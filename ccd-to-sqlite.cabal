@@ -75,6 +75,7 @@ executable ccd-to-sqlite
                     , KanjiDic2Sql
                     , CEdictParser
                     , CEdictSql
+                    , UnihanReadingsParser
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
