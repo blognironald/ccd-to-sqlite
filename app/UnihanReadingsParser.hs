@@ -4,15 +4,16 @@ module UnihanReadingsParser where
 
 import Text.Megaparsec
 import Text.Megaparsec.Char
-import qualified Text.Megaparsec.Char.Lexer as L
+-- import qualified Text.Megaparsec.Char.Lexer as L
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Void
-import Data.Char (chr)
+import Data.Char (chr, isAsciiLower)
 import Numeric (readHex)
 import Control.Monad (void)
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (catMaybes)
+import Data.List (find)
 
 -- Type alias for our parser
 type Parser = Parsec Void Text
@@ -50,7 +51,7 @@ parseCommentLine = do
 parseEmptyLine :: Parser ()
 parseEmptyLine = do
   _ <- many (char ' ' <|> char '\t')
-  _ <- eol <|> (eof >> return '\n')
+  _ <- void eol <|> eof
   return ()
 
 -- Parse a data line (could be any field, but we only care about kDefinition)
@@ -61,12 +62,12 @@ parseDataLine = do
   fieldName <- parseFieldName
   _ <- char '\t'
   fieldValue <- parseFieldValue
-  _ <- eol <|> (eof >> return '\n')
+  _ <- void eol <|> eof
   
   -- Only create an entry if it's a kDefinition field
   if fieldName == "kDefinition"
     then case codePointToChar codePoint of
-      Just char -> return $ Just $ UnihanEntry char codePoint fieldValue
+      Just c -> return $ Just $ UnihanEntry c codePoint fieldValue
       Nothing -> return Nothing
     else return Nothing
 
@@ -87,9 +88,9 @@ parseFieldValue = T.pack <$> manyTill anySingle (lookAhead (void eol <|> eof))
 
 -- Convert a code point string to the actual character
 codePointToChar :: Text -> Maybe Char
-codePointToChar codePoint = 
+codePointToChar codePoint =
   case T.stripPrefix "U+" codePoint of
-    Just hexStr -> 
+    Just hexStr ->
       case readHex (T.unpack hexStr) of
         [(value, "")] -> Just (chr value)
         _ -> Nothing
@@ -108,9 +109,9 @@ charToCodePoint c = T.pack $ "U+" ++ toHexString (fromEnum c)
       | n < 10 = chr (48 + n)
       | n < 16 = chr (55 + n)
       | otherwise = error "Invalid hex digit"
-    toUpper c
-      | c >= 'a' && c <= 'z' = chr (fromEnum c - 32)
-      | otherwise = c
+    toUpper c'
+      | isAsciiLower c' = chr (fromEnum c' - 32)
+      | otherwise = c'
 
 -- Parse Unihan file from file path
 parseUnihanFromFile :: FilePath -> IO (Either (ParseErrorBundle Text Void) [UnihanEntry])
@@ -140,11 +141,7 @@ prettyPrintEntries = T.concat . map prettyPrintEntry
 
 -- Find entry by character
 findByCharacter :: Char -> [UnihanEntry] -> Maybe UnihanEntry
-findByCharacter char entries = 
-  listToMaybe $ filter (\e -> ueCharacter e == char) entries
-  where
-    listToMaybe [] = Nothing
-    listToMaybe (x:_) = Just x
+findByCharacter c = find (\e -> ueCharacter e == c)
 
 -- Find entries containing a word in the definition (case-insensitive)
 findByDefinitionWord :: Text -> [UnihanEntry] -> [UnihanEntry]
@@ -163,8 +160,8 @@ getStatistics entries = (totalEntries, avgDefLength, maxDefLength)
   where
     totalEntries = length entries
     defLengths = map (T.length . ueDefinition) entries
-    avgDefLength = if totalEntries > 0 
-                   then sum defLengths `div` totalEntries 
+    avgDefLength = if totalEntries > 0
+                   then sum defLengths `div` totalEntries
                    else 0
     maxDefLength = if null defLengths then 0 else maximum defLengths
 
@@ -184,31 +181,31 @@ mainUnihanParser = do
         , "# Another comment"
         , "U+340C\tkDefinition\ta tribe of savages in South China"
         ]
-  
+
   case parseUnihanFromText sampleData of
     Left err -> putStrLn $ "Parse error: " ++ errorBundlePretty err
     Right entries -> do
       putStrLn $ "Successfully parsed " ++ show (length entries) ++ " entries with definitions:"
       T.putStrLn $ prettyPrintEntries entries
-      
+
       -- Demonstrate query functions
       putStrLn "=== Query Examples ==="
-      
+
       case entries of
         (firstEntry:_) -> do
-          let char = ueCharacter firstEntry
-          putStrLn $ "Looking up character: " ++ [char]
-          case findByCharacter char entries of
+          let c = ueCharacter firstEntry
+          putStrLn $ "Looking up character: " ++ [c]
+          case findByCharacter c entries of
             Just entry -> T.putStrLn $ prettyPrintEntry entry
             Nothing -> putStrLn "Character not found"
         _ -> putStrLn "No entries found"
-      
+
       putStrLn "Entries containing 'ancient':"
       T.putStrLn $ prettyPrintEntries $ findByDefinitionWord "ancient" entries
-      
+
       -- Show statistics
       let (total, avgLen, maxLen) = getStatistics entries
-      putStrLn $ "\n=== Statistics ==="
+      putStrLn   "\n=== Statistics ==="
       putStrLn $ "Total entries with definitions: " ++ show total
       putStrLn $ "Average definition length: " ++ show avgLen ++ " characters"
       putStrLn $ "Maximum definition length: " ++ show maxLen ++ " characters"
@@ -225,7 +222,7 @@ processUnihanFile inputPath outputPath = do
       putStrLn $ "Found " ++ show (length entries) ++ " entries with definitions"
       T.writeFile outputPath (prettyPrintEntries entries)
       putStrLn $ "Results saved to " ++ outputPath
-      
+
       -- Print some sample entries
       putStrLn "\nFirst 5 entries:"
       T.putStrLn $ prettyPrintEntries (take 5 entries)
