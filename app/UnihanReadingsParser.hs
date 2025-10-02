@@ -1,236 +1,161 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module UnihanReadingsParser where
 
-import Text.Megaparsec
+import Prelude 
+import Data.Text as T
+import Data.Text.IO as T
 import Text.Megaparsec.Char
--- import qualified Text.Megaparsec.Char.Lexer as L
-import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Data.Void
-import Data.Char (chr, isAsciiLower)
+import Text.Megaparsec
+import Data.Void (Void)
+import Data.Char
+import qualified Text.Megaparsec.Char.Lexer as L
+import Data.Maybe (catMaybes)
 import Numeric (readHex)
 import Control.Monad (void)
-import Data.Maybe (catMaybes)
-import Data.List (find)
+import System.Exit (die)
 
--- Type alias for our parser
-type Parser = Parsec Void Text
+type Parser = Parsec Void T.Text
 
--- Data type representing a Unihan entry with definition
-data UnihanEntry = UnihanEntry
-  { ueCharacter :: Char        -- The actual Unicode character
-  , ueCodePoint :: Text        -- The U+XXXX code point (for reference)
-  , ueDefinition :: Text       -- The definition from kDefinition field
-  } deriving (Show, Eq)
+data UnihanEntry = UnihanEntry {
+    uniCharacter   :: Text,
+    uniDefinition  :: Text
+} deriving (Show, Eq)
 
--- Parse the entire Unihan file, returning only entries with definitions
-parseUnihanFile :: Parser [UnihanEntry]
-parseUnihanFile = do
-  entries <- many parseUnihanLine
-  eof
-  return $ catMaybes entries
+pCodePoint :: Parser Text
+pCodePoint = do
+    _ <- string $ T.pack "U+"
+    hex <- some hexDigitChar
+    return $ T.pack $ "U+" ++ hex
 
--- Parse a single line, returning Nothing for non-definition lines
-parseUnihanLine :: Parser (Maybe UnihanEntry)
-parseUnihanLine = choice
-  [ Nothing <$ parseCommentLine
-  , Nothing <$ parseEmptyLine
-  , parseDataLine
-  ]
+pFieldName :: Parser Text
+pFieldName = T.pack <$> some (alphaNumChar <|> char '_')
 
--- Parse a comment line (starting with #)
-parseCommentLine :: Parser ()
-parseCommentLine = do
-  _ <- char '#'
-  _ <- manyTill anySingle (void eol <|> eof)
-  return ()
+pFieldValue :: Parser Text
+pFieldValue = T.pack <$> manyTill anySingle eol
 
--- Parse an empty line
-parseEmptyLine :: Parser ()
-parseEmptyLine = do
-  _ <- many (char ' ' <|> char '\t')
-  _ <- void eol <|> eof
-  return ()
+pCommentLine :: Parser ()
+pCommentLine = do
+    _ <- char '#'
+    _ <- manyTill anySingle eol
+    return ()
 
--- Parse a data line (could be any field, but we only care about kDefinition)
-parseDataLine :: Parser (Maybe UnihanEntry)
-parseDataLine = do
-  codePoint <- parseCodePoint
-  _ <- char '\t'
-  fieldName <- parseFieldName
-  _ <- char '\t'
-  fieldValue <- parseFieldValue
-  _ <- void eol <|> eof
-  
-  -- Only create an entry if it's a kDefinition field
-  if fieldName == "kDefinition"
-    then case codePointToChar codePoint of
-      Just c -> return $ Just $ UnihanEntry c codePoint fieldValue
-      Nothing -> return Nothing
-    else return Nothing
+pEmptyLine :: Parser ()
+pEmptyLine = do
+    _ <- many (char ' ' <|> char '\t')
+    _ <- eol
+    return ()
 
--- Parse the Unicode code point (U+XXXX format)
-parseCodePoint :: Parser Text
-parseCodePoint = do
-  _ <- string "U+"
-  hex <- some hexDigitChar
-  return $ T.pack $ "U+" ++ hex
+codePointToChar :: Text -> Maybe Text
+codePointToChar codePoint = 
+    case T.stripPrefix (T.pack "U+") codePoint of
+        Just hexStr -> 
+            case readHex (T.unpack hexStr) of
+                [(value, "")] -> Just $ T.singleton (chr value)
+                _ -> Nothing
+        Nothing -> Nothing
 
--- Parse field name (e.g., kDefinition, kCantonese, etc.)
-parseFieldName :: Parser Text
-parseFieldName = T.pack <$> some (alphaNumChar <|> char '_')
+pDataLine :: Parser (Maybe UnihanEntry)
+pDataLine = do
+    codePoint <- pCodePoint
+    _ <- char '\t'
+    fieldName <- pFieldName
+    _ <- char '\t'
+    fieldValue <- pFieldValue
+    
+    if fieldName == T.pack "kDefinition"
+        then case codePointToChar codePoint of
+            Just character -> return $ Just UnihanEntry {
+                uniCharacter = character,
+                uniDefinition = fieldValue
+            }
+            Nothing -> return Nothing
+        else return Nothing
 
--- Parse field value (everything until end of line)
-parseFieldValue :: Parser Text
-parseFieldValue = T.pack <$> manyTill anySingle (lookAhead (void eol <|> eof))
+pUnihanLine :: Parser (Maybe UnihanEntry)
+pUnihanLine = choice
+    [ Nothing <$ pCommentLine
+    , Nothing <$ pEmptyLine
+    , pDataLine
+    ]
 
--- Convert a code point string to the actual character
-codePointToChar :: Text -> Maybe Char
-codePointToChar codePoint =
-  case T.stripPrefix "U+" codePoint of
-    Just hexStr ->
-      case readHex (T.unpack hexStr) of
-        [(value, "")] -> Just (chr value)
-        _ -> Nothing
-    Nothing -> Nothing
+parseAsUnihanEntry :: Parser [UnihanEntry]
+parseAsUnihanEntry = do
+    result <- many pUnihanLine
+    _ <- eof
+    return $ catMaybes result
 
--- Alternative conversion function (for use in other contexts)
+runUnihanParser :: String -> IO (Either String [UnihanEntry])
+runUnihanParser input = do
+    result <- runParser parseAsUnihanEntry input <$> T.readFile input
+    case result of
+        Left err -> return $ Left (errorBundlePretty err)
+        Right rows -> return $ Right rows
+
+runner = do
+    result <- runUnihanParser "others/Unihan_Readings.txt"
+    case result of
+        Left err -> die err
+        Right entries -> do
+            -- Prelude.putStrLn $ "Total entries parsed: " ++ show (Prelude.length entries)
+            T.putStr $ prettyPrintEntries entries
+            -- mapM_ (T.putStrLn . prettyPrintEntry) entries
+            -- let (total, avgLen, maxLen) = getStatistics entries
+            -- Prelude.putStrLn $ "Statistics - Total: " ++ show total ++ ", Avg Def Length: " ++ show avgLen ++ ", Max Def Length: " ++ show maxLen
+            -- let defs = extractDefinitions entries
+            -- mapM_ (\(c, d) -> T.putStrLn $ c <> T.pack ": " <> d) defs
+
 charToCodePoint :: Char -> Text
 charToCodePoint c = T.pack $ "U+" ++ toHexString (fromEnum c)
-  where
-    toHexString n = let hex = showHex n ""
-                    in map toUpper $ replicate (4 - length hex) '0' ++ hex
-    showHex n s
-      | n < 16 = hexDigit n : s
-      | otherwise = showHex (n `div` 16) (hexDigit (n `mod` 16) : s)
-    hexDigit n
-      | n < 10 = chr (48 + n)
-      | n < 16 = chr (55 + n)
-      | otherwise = error "Invalid hex digit"
-    toUpper c'
-      | isAsciiLower c' = chr (fromEnum c' - 32)
-      | otherwise = c'
+    where
+        toHexString n = let hex = showHex n ""
+                        in Prelude.map toUpper $ Prelude.replicate (4 - Prelude.length hex) '0' ++ hex
+        showHex n s
+            | n < 16 = hexDigit n : s
+            | otherwise = showHex (n `div` 16) (hexDigit (n `mod` 16) : s)
+        hexDigit n
+            | n < 10 = chr (48 + n)
+            | n < 16 = chr (55 + n)
+            | otherwise = error "Invalid hex digit"
+        toUpper c'
+            | c' >= 'a' && c' <= 'z' = chr (fromEnum c' - 32)
+            | otherwise = c'
 
--- Parse Unihan file from file path
-parseUnihanFromFile :: FilePath -> IO (Either (ParseErrorBundle Text Void) [UnihanEntry])
-parseUnihanFromFile filePath = do
-  content <- T.readFile filePath
-  return $ parse parseUnihanFile filePath content
+findByCharacter :: Text -> [UnihanEntry] -> Maybe UnihanEntry
+findByCharacter t entries = 
+    listToMaybe $ Prelude.filter (\e -> uniCharacter e == t) entries
+    where
+        listToMaybe [] = Nothing
+        listToMaybe (x:_) = Just x
 
--- Parse Unihan content from Text
-parseUnihanFromText :: Text -> Either (ParseErrorBundle Text Void) [UnihanEntry]
-parseUnihanFromText = parse parseUnihanFile "input"
-
--- Pretty printing functions
-
--- Pretty print a single entry
-prettyPrintEntry :: UnihanEntry -> Text
-prettyPrintEntry entry = T.unlines
-  [ "Character:   " <> T.singleton (ueCharacter entry) <> " (" <> ueCodePoint entry <> ")"
-  , "Definition:  " <> ueDefinition entry
-  , "─────────────────────────────────────────────────"
-  ]
-
--- Pretty print multiple entries
-prettyPrintEntries :: [UnihanEntry] -> Text
-prettyPrintEntries = T.concat . map prettyPrintEntry
-
--- Utility functions for querying parsed data
-
--- Find entry by character
-findByCharacter :: Char -> [UnihanEntry] -> Maybe UnihanEntry
-findByCharacter c = find (\e -> ueCharacter e == c)
-
--- Find entries containing a word in the definition (case-insensitive)
 findByDefinitionWord :: Text -> [UnihanEntry] -> [UnihanEntry]
-findByDefinitionWord searchTerm = filter containsWord
-  where
-    lowerSearchTerm = T.toLower searchTerm
-    containsWord entry = T.isInfixOf lowerSearchTerm (T.toLower $ ueDefinition entry)
+findByDefinitionWord searchTerm = Prelude.filter containsWord
+    where
+        lowerSearchTerm = T.toLower searchTerm
+        containsWord entry = T.isInfixOf lowerSearchTerm (T.toLower $ uniDefinition entry)
 
--- Get all characters with definitions as a Text string
 getAllCharacters :: [UnihanEntry] -> Text
-getAllCharacters entries = T.pack $ map ueCharacter entries
+getAllCharacters  = T.concat . fmap uniCharacter 
 
--- Statistics function
 getStatistics :: [UnihanEntry] -> (Int, Int, Int)
 getStatistics entries = (totalEntries, avgDefLength, maxDefLength)
-  where
-    totalEntries = length entries
-    defLengths = map (T.length . ueDefinition) entries
-    avgDefLength = if totalEntries > 0
-                   then sum defLengths `div` totalEntries
-                   else 0
-    maxDefLength = if null defLengths then 0 else maximum defLengths
+    where
+        totalEntries = Prelude.length entries
+        defLengths = Prelude.map (T.length . uniDefinition) entries
+        avgDefLength = if totalEntries > 0 
+                       then Prelude.sum defLengths `div` totalEntries 
+                       else 0
+        maxDefLength = if Prelude.null defLengths then 0 else Prelude.maximum defLengths
 
--- Example usage and testing
-mainUnihanParser :: IO ()
-mainUnihanParser = do
-  -- Test with sample data
-  let sampleData = T.unlines
-        [ "# Comments should be ignored"
-        , "U+3400\tkCantonese\tjau1"
-        , "U+3400\tkDefinition\t(same as 丘) hillock or mound"
-        , "U+3400\tkJapanese\tキュウ おか"
-        , "U+3401\tkDefinition\tto lick; to taste, a mat, bamboo bark"
-        , "U+3402\tkDefinition\t(non-standard Japanese variant of 喜), to like, love, enjoy; a joyful thing"
-        , "U+3405\tkCantonese\tng5"
-        , "U+3405\tkDefinition\t(ancient form of 五) five"
-        , "# Another comment"
-        , "U+340C\tkDefinition\ta tribe of savages in South China"
-        ]
+prettyPrintEntry :: UnihanEntry -> Text
+prettyPrintEntry entry = T.unlines
+    [ T.pack "Character:   " <> uniCharacter entry
+    , T.pack "Definition:  " <> uniDefinition entry
+    , T.pack "─────────────────────────────────────────────────"
+    ]
 
-  case parseUnihanFromText sampleData of
-    Left err -> putStrLn $ "Parse error: " ++ errorBundlePretty err
-    Right entries -> do
-      putStrLn $ "Successfully parsed " ++ show (length entries) ++ " entries with definitions:"
-      T.putStrLn $ prettyPrintEntries entries
+prettyPrintEntries :: [UnihanEntry] -> Text
+prettyPrintEntries = T.concat . Prelude.map prettyPrintEntry
 
-      -- Demonstrate query functions
-      putStrLn "=== Query Examples ==="
-
-      case entries of
-        (firstEntry:_) -> do
-          let c = ueCharacter firstEntry
-          putStrLn $ "Looking up character: " ++ [c]
-          case findByCharacter c entries of
-            Just entry -> T.putStrLn $ prettyPrintEntry entry
-            Nothing -> putStrLn "Character not found"
-        _ -> putStrLn "No entries found"
-
-      putStrLn "Entries containing 'ancient':"
-      T.putStrLn $ prettyPrintEntries $ findByDefinitionWord "ancient" entries
-
-      -- Show statistics
-      let (total, avgLen, maxLen) = getStatistics entries
-      putStrLn   "\n=== Statistics ==="
-      putStrLn $ "Total entries with definitions: " ++ show total
-      putStrLn $ "Average definition length: " ++ show avgLen ++ " characters"
-      putStrLn $ "Maximum definition length: " ++ show maxLen ++ " characters"
-      putStrLn $ "All characters: " ++ T.unpack (getAllCharacters entries)
-
--- Function to process a full Unihan file and save results
-processUnihanFile :: FilePath -> FilePath -> IO ()
-processUnihanFile inputPath outputPath = do
-  putStrLn $ "Processing " ++ inputPath ++ "..."
-  result <- parseUnihanFromFile inputPath
-  case result of
-    Left err -> putStrLn $ "Parse error: " ++ errorBundlePretty err
-    Right entries -> do
-      putStrLn $ "Found " ++ show (length entries) ++ " entries with definitions"
-      T.writeFile outputPath (prettyPrintEntries entries)
-      putStrLn $ "Results saved to " ++ outputPath
-
-      -- Print some sample entries
-      putStrLn "\nFirst 5 entries:"
-      T.putStrLn $ prettyPrintEntries (take 5 entries)
-
--- Helper to extract all definitions as a list of (Character, Definition) pairs
-extractDefinitions :: [UnihanEntry] -> [(Char, Text)]
-extractDefinitions = map (\e -> (ueCharacter e, ueDefinition e))
-
--- Main function for testing
--- main :: IO ()
--- main = mainUnihanParser
+extractDefinitions :: [UnihanEntry] -> [(Text, Text)]
+extractDefinitions = Prelude.map (\e -> (uniCharacter e, uniDefinition e))
