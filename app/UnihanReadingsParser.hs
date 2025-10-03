@@ -11,13 +11,18 @@ import Data.Maybe (catMaybes)
 import Numeric (readHex)
 import System.Exit (die)
 import Data.List as L ( find )
+import Database.SQLite.Simple
 
 type Parser = Parsec Void T.Text
 
-data UnihanEntry = UnihanEntry {
+data UnihanReading = UnihanReading {
     uniCharacter   :: Text,
     uniDefinition  :: Text
 } deriving (Show, Eq)
+
+-- Result type for queries
+instance FromRow UnihanReading where
+    fromRow = UnihanReading <$> field <*> field
 
 pCodePoint :: Parser Text
 pCodePoint = do
@@ -52,7 +57,7 @@ codePointToChar codePoint =
                 _ -> Nothing
         Nothing -> Nothing
 
-pDataLine :: Parser (Maybe UnihanEntry)
+pDataLine :: Parser (Maybe UnihanReading)
 pDataLine = do
     codePoint <- pCodePoint
     _ <- char '\t'
@@ -62,27 +67,27 @@ pDataLine = do
 
     if fieldName == T.pack "kDefinition"
         then case codePointToChar codePoint of
-            Just character -> return $ Just UnihanEntry {
+            Just character -> return $ Just UnihanReading {
                 uniCharacter = character,
                 uniDefinition = fieldValue
             }
             Nothing -> return Nothing
         else return Nothing
 
-pUnihanLine :: Parser (Maybe UnihanEntry)
+pUnihanLine :: Parser (Maybe UnihanReading)
 pUnihanLine = choice
     [ Nothing <$ pCommentLine
     , Nothing <$ pEmptyLine
     , pDataLine
     ]
 
-parseAsUnihanEntry :: Parser [UnihanEntry]
+parseAsUnihanEntry :: Parser [UnihanReading]
 parseAsUnihanEntry = do
     result <- many pUnihanLine
     _ <- eof
     return $ catMaybes result
 
-runUnihanParser :: String -> IO (Either String [UnihanEntry])
+runUnihanParser :: String -> IO (Either String [UnihanReading])
 runUnihanParser input = do
     result <- runParser parseAsUnihanEntry input <$> T.readFile input
     case result of
@@ -119,20 +124,20 @@ charToCodePoint c = T.pack $ "U+" ++ toHexString (fromEnum c)
             | isAsciiLower c' = chr (fromEnum c' - 32)
             | otherwise = c'
 
-findByCharacter :: Text -> [UnihanEntry] -> Maybe UnihanEntry
+findByCharacter :: Text -> [UnihanReading] -> Maybe UnihanReading
 findByCharacter t = L.find (\e -> uniCharacter e == t)
 
 
-findByDefinitionWord :: Text -> [UnihanEntry] -> [UnihanEntry]
+findByDefinitionWord :: Text -> [UnihanReading] -> [UnihanReading]
 findByDefinitionWord searchTerm = Prelude.filter containsWord
     where
         lowerSearchTerm = T.toLower searchTerm
         containsWord entry = T.isInfixOf lowerSearchTerm (T.toLower $ uniDefinition entry)
 
-getAllCharacters :: [UnihanEntry] -> Text
+getAllCharacters :: [UnihanReading] -> Text
 getAllCharacters  = T.concat . fmap uniCharacter
 
-getStatistics :: [UnihanEntry] -> (Int, Int, Int)
+getStatistics :: [UnihanReading] -> (Int, Int, Int)
 getStatistics entries = (totalEntries, avgDefLength, maxDefLength)
     where
         totalEntries = Prelude.length entries
@@ -142,15 +147,15 @@ getStatistics entries = (totalEntries, avgDefLength, maxDefLength)
                        else 0
         maxDefLength = if Prelude.null defLengths then 0 else Prelude.maximum defLengths
 
-prettyPrintEntry :: UnihanEntry -> Text
+prettyPrintEntry :: UnihanReading -> Text
 prettyPrintEntry entry = T.unlines
     [ T.pack "Character:   " <> uniCharacter entry
     , T.pack "Definition:  " <> uniDefinition entry
     , T.pack "─────────────────────────────────────────────────"
     ]
 
-prettyPrintEntries :: [UnihanEntry] -> Text
+prettyPrintEntries :: [UnihanReading] -> Text
 prettyPrintEntries = T.concat . Prelude.map prettyPrintEntry
 
-extractDefinitions :: [UnihanEntry] -> [(Text, Text)]
+extractDefinitions :: [UnihanReading] -> [(Text, Text)]
 extractDefinitions = Prelude.map (\e -> (uniCharacter e, uniDefinition e))
