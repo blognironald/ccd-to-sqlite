@@ -111,6 +111,12 @@ insertMultipleCedictEntries db entries = do
   mapM_ (insertCompleteCedictEntry db) entries
   execute_ db "COMMIT;"
 
+runCedictSql :: ConnectionPath -> [CedictEntry] -> IO ()
+runCedictSql dbName entries = do
+  db <- initializeConnection dbName
+  insertMultipleCedictEntries db entries
+  close db
+
 -- Query functions
 
 -- Find entries by traditional characters

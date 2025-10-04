@@ -187,7 +187,9 @@ parseRobustCedictFile = do
       return ()
 
 -- Robust file parser function
-parseCedictFileRobust :: FilePath -> IO (Either (ParseErrorBundle Text Void) [CedictEntry])
-parseCedictFileRobust filePath = do
-  content <- T.readFile filePath
-  return $ parse parseRobustCedictFile filePath content
+runCedictParser :: FilePath -> IO (Either String [CedictEntry])
+runCedictParser filePath = do
+  result <- runParser parseRobustCedictFile filePath <$> T.readFile filePath
+  case result of
+    Left err -> return $ Left (errorBundlePretty err)
+    Right rows -> return $ Right rows
