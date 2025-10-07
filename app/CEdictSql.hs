@@ -107,15 +107,15 @@ insertCompleteCedictEntry db entry = do
 -- Batch insert multiple entries in a transaction
 insertMultipleCedictEntries :: Connection -> [CedictEntry] -> IO ()
 insertMultipleCedictEntries db entries = do
-  execute_ db "BEGIN TRANSACTION;"
+  -- execute_ db "BEGIN TRANSACTION;"
   mapM_ (insertCompleteCedictEntry db) entries
-  execute_ db "COMMIT;"
+  -- execute_ db "COMMIT;"
 
 runCedictSql :: ConnectionPath -> [CedictEntry] -> IO ()
 runCedictSql dbName entries = do
   db <- initializeConnection dbName
   insertMultipleCedictEntries db entries
-  close db
+  -- close db
 
 -- Query functions
 
