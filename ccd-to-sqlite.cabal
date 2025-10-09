@@ -71,6 +71,7 @@ executable ccd-to-sqlite
                     , ComponentsFromCharacter
                     , GenerateN5Characters
                     , JMdictParser
+                    , JMdictSql
                     , KanjiDic2Parser
                     , KanjiDic2Sql
                     , CEdictParser
