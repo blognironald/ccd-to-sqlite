@@ -11,6 +11,8 @@ import Data.Maybe
 -- import Control.Monad (guard)
 -- import Data.List (find)
 
+import Control.Exception (try)
+
 -- | Main JMdict entry structure
 data JMdictEntry = JMdictEntry
   { entrySeq :: !Int                    -- ^ Unique sequence number
@@ -265,3 +267,11 @@ exampleUsage = do
 
   -- Print first few entries
   mapM_ (T.putStr . prettyPrintEntry) (take 3 waterEntries)
+
+-- | Run the JMdict parser on a file
+runJMdictParser :: FilePath -> IO (Either String [JMdictEntry])
+runJMdictParser filePath = do
+    result <- try $ parseJMdictFile filePath
+    case result of
+        Left err -> return $ Left (show (err :: XMLException))
+        Right entries -> return $ Right entries

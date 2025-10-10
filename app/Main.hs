@@ -18,6 +18,8 @@ import UnihanReadingsParser
 import UnihanReadingsSql 
 import CEdictParser
 import CEdictSql
+import JMdictParser
+import JMdictSql
 
 -- import System.Environment (withArgs)
 -- withArgs ["--op", "ccd",      "-iothers/ccd.txt",             "-oothers/ccd.db3"              ] main
@@ -61,7 +63,11 @@ main = do
                 Right entries -> do
                     runCedictSql (output args) entries
         "jmdict" -> do
-            putStrLn "\nJMdict parsing not yet implemented.\n"
+            result <- runJMdictParser $ input args
+            case result of
+                Left err -> die err
+                Right entries -> do
+                    runJMdictSql (output args) entries
         _     -> putStrLn $ "\nUnidentified operation: " ++ operation args ++ "\n"
     putStrLn "\nDone!"
 
@@ -71,4 +77,5 @@ runAll = do
     withArgs ["--op", "kanjidic", "-iothers/kanjidic2.xml"                ] main
     withArgs ["--op", "cedict",   "-iothers/cedict_ts.u8"                 ] main
     withArgs ["--op", "unihan",   "-iothers/Unihan_Readings.txt"          ] main
+    withArgs ["--op", "jmdict",   "-iothers/JMdict_e_examp.xml"           ] main
 
