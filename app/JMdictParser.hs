@@ -74,6 +74,7 @@ data Example = Example
   , exampleEnglish :: !Text             -- ^ English translation
   , exampleSourceType :: !Text          -- ^ Seq Num from the Tatoeba Project
   , exampleSource :: !Text              -- ^ Source reference
+  , exampleText :: !Text
   } deriving (Show, Eq)
 
 -- | Parse JMdict_e_examp XML file
@@ -189,6 +190,7 @@ parseExample cursor = Example
   , exampleEnglish = getLanguageExample cursor "eng"
   , exampleSource = getFirstContent cursor "ex_srce"
   , exampleSourceType = fromMaybe "" $ listToMaybe (cursor $/ attribute "exsrc_type")
+  , exampleText = getFirstContent cursor "ex_text"
   }
 
 -- Helper functions
@@ -253,20 +255,97 @@ prettyPrintEntry entry = T.unlines
       , ""
       ]
 
+prettyPrintEntryDetailed :: JMdictEntry -> Text
+prettyPrintEntryDetailed entry = T.unlines $
+    [ "============ Entry #" <> T.pack (show $ entrySeq entry) <> " ============"
+    , ""
+    , "=== Kanji Elements ==="
+    ] <> concatMap printKanjiElement (kanjiElements entry) <>
+    [ ""
+    , "=== Reading Elements ==="
+    ] <> concatMap printReadingElement (readingElements entry) <>
+    [ ""
+    , "=== Senses ==="
+    ] <> concatMap (printSense 1) (senses entry)
+  where
+    printKanjiElement k =
+      [ "  Kanji: " <> kanjiText k
+      , "    Info: " <> formatList (kanjiInfo k)
+      , "    Priority: " <> formatList (kanjiPriority k)
+      , ""
+      ]
+
+    printReadingElement r =
+      [ "  Reading: " <> readingText r
+      , "    No Kanji: " <> T.pack (show $ readingNoKanji r)
+      , "    Restrictions: " <> formatList (readingRestrictions r)
+      , "    Info: " <> formatList (readingInfo r)
+      , "    Priority: " <> formatList (readingPriority r)
+      , ""
+      ]
+
+    printSense n s =
+      [ "  Sense #" <> T.pack (show n) <> ":"
+      , "    Restrictions: " <> formatList (senseRestrictions s)
+      , "    Cross References: " <> formatList (crossReferences s)
+      , "    Antonyms: " <> formatList (antonyms s)
+      , "    Parts of Speech: " <> formatList (partOfSpeech s)
+      , "    Fields: " <> formatList (fields s)
+      , "    Misc Info: " <> formatList (miscInfo s)
+      , "    Dialect Info: " <> formatList (dialectInfo s)
+      , "    Sense Info: " <> formatList (senseInfo s)
+      , "    Language Sources:"
+      ] <> map ("      " <>) (concatMap printLangSource (languageSources s)) <>
+      [ "    Glosses:"
+      ] <> map ("      " <>) (concatMap printGloss (glosses s)) <>
+      [ "    Examples:"
+      ] <> map ("      " <>) (concatMap printExample (example s)) <>
+      [""]
+
+    printLangSource ls =
+      [ "Language: " <> lsLang ls
+      , "Type: " <> maybe "None" id (lsType ls)
+      , "Wasei: " <> T.pack (show $ lsWasei ls)
+      , "Text: " <> maybe "None" id (lsText ls)
+      , ""
+      ]
+
+    printGloss g =
+      [ "Text: " <> glossText g
+      , "Language: " <> maybe "eng" id (glossLang g)
+      , "Gender: " <> maybe "None" id (glossGender g)
+      , "Type: " <> maybe "None" id (glossType g)
+      , ""
+      ]
+
+    printExample e =
+      [ "Japanese: " <> exampleJapanese e
+      , "English: " <> exampleEnglish e
+      , "Source Type: " <> exampleSourceType e
+      , "Source: " <> exampleSource e
+      , "Text: " <> exampleText e
+      , ""
+      ]
+
+    formatList [] = "None"
+    formatList xs = T.intercalate ", " xs
+
 -- Example usage function
 exampleUsage :: IO ()
 exampleUsage = do
   -- Parse the JMdict_e_examp file
-  entries <- parseJMdictFile "others\\JMdict_e_examp"
+  -- entries <- parseJMdictFile "others\\JMdict_e_examp.xml"
+  entries <- parseJMdictFile "others\\jmdictinfo.xml"
 
   putStrLn $ "Loaded " ++ show (length entries) ++ " entries"
 
   -- Search for entries containing "水"
-  let waterEntries = searchEntries "水" entries
-  putStrLn $ "Found " ++ show (length waterEntries) ++ " entries for '水'"
+  let waterEntries = searchEntries "明白" entries
+  putStrLn $ "Found " ++ show (length waterEntries) ++ " entries for '明白'"
 
   -- Print first few entries
-  mapM_ (T.putStr . prettyPrintEntry) (take 3 waterEntries)
+  -- mapM_ (T.putStr . prettyPrintEntry) (take 3 waterEntries)
+  mapM_ (T.putStr . prettyPrintEntryDetailed) (take 3 waterEntries)
 
 -- | Run the JMdict parser on a file
 runJMdictParser :: FilePath -> IO (Either String [JMdictEntry])
