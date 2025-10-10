@@ -5,6 +5,7 @@ module JMdictSql where
 import qualified JMdictParser as P
 import Database.SQLite.Simple
 import Data.Text as T
+import Control.Monad
 
 -- SQL table creation commands
 createTableEntry :: Query
@@ -13,20 +14,30 @@ createTableEntry = Query $ T.pack "\
     \    seq_id INTEGER PRIMARY KEY\
     \);"
 
-createTableKanji :: Query
-createTableKanji = Query $ T.pack "\
+createTableKanjiElement :: Query
+createTableKanjiElement = Query $ T.pack "\
     \CREATE TABLE IF NOT EXISTS kanji (\
     \    kanji_text TEXT NOT NULL,\
-    \    entry_id INTEGER NOT NULL,\
-    \    FOREIGN KEY(entry_id) REFERENCES entry(seq_id)\
+    \    entry_seq INTEGER NOT NULL,\
+    \    kanji_text_no INTEGER NOT NULL\
     \);"
 
 createTableKanjiInfo :: Query
 createTableKanjiInfo = Query $ T.pack "\
     \CREATE TABLE IF NOT EXISTS kanji_info (\
-    \    kanji_text TEXT NOT NULL,\
-    \    info_type TEXT NOT NULL,\
-    \    info_text TEXT NOT NULL\
+    \    info_text TEXT NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    kanji_text_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, kanji_text_no) REFERENCES kanji(entry_seq, kanji_text_no)\
+    \);"
+
+createTableKanjiPriority :: Query
+createTableKanjiPriority = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS kanji_priority (\
+    \    priority_text TEXT NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    kanji_text_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, kanji_text_no) REFERENCES kanji(entry_seq, kanji_text_no)\
     \);"
 
 createTableReading :: Query
@@ -73,11 +84,16 @@ insertEntry :: Query
 insertEntry = Query "INSERT INTO entry (seq_id) VALUES (?);"
 
 insertKanji :: Query
-insertKanji = Query "INSERT INTO kanji (kanji_text, entry_id) VALUES (?, ?);"
+insertKanji = Query "INSERT INTO kanji (kanji_text, entry_seq, kanji_text_no) VALUES (?, ?, ?);"
 
 insertKanjiInfo :: Query
 insertKanjiInfo = Query "\
-    \INSERT INTO kanji_info (kanji_text, info_type, info_text) \
+    \INSERT INTO kanji_info (info_text, entry_seq, kanji_text_no) \
+    \VALUES (?, ?, ?);"
+
+insertKanjiPriority :: Query
+insertKanjiPriority = Query "\
+    \INSERT INTO kanji_priority (priority_text, entry_seq, kanji_text_no) \
     \VALUES (?, ?, ?);"
 
 insertReading :: Query
@@ -105,9 +121,9 @@ newtype EntryRow = EntryRow P.JMdictEntry
 instance ToRow EntryRow where
     toRow (EntryRow entry) = toRow (Only (P.entrySeq entry))
 
-data KanjiRow = KanjiRow Text Int
+data KanjiRow = KanjiRow Text Int Int
 instance ToRow KanjiRow where
-    toRow (KanjiRow kanji entryId) = toRow (kanji, entryId)
+    toRow (KanjiRow kanji entrySeqInt kanjiTextNo) = toRow (kanji, entrySeqInt, kanjiTextNo)
 
 data ReadingRow = ReadingRow Text Int Bool
 instance ToRow ReadingRow where
@@ -133,7 +149,8 @@ runJMdictSql dbName entries = do
 
     -- Create tables
     execute_ db createTableEntry
-    execute_ db createTableKanji
+    execute_ db createTableKanjiElement
+    execute_ db createTableKanjiPriority
     execute_ db createTableKanjiInfo
     execute_ db createTableReading
     execute_ db createTableSense
@@ -152,9 +169,20 @@ insertEntryData db entry = do
     let entryId = P.entrySeq entry
 
     -- Insert kanji elements
-    mapM_ (\k -> execute db insertKanji $
-           KanjiRow (P.kanjiText k) entryId)
-           (P.kanjiElements entry)
+    -- mapM_ (\k -> execute db insertKanji $
+    --        KanjiRow (P.kanjiText k) entryId)
+    --        (P.kanjiElements entry)
+    mapM_ 
+        (\(kElem, kElem_idx) -> do
+            execute db insertKanji $ KanjiRow (P.kanjiText kElem) entryId kElem_idx
+            mapM_ 
+                (\info -> execute db insertKanjiInfo $ KanjiRow info entryId kElem_idx) 
+                (P.kanjiInfo kElem)
+            mapM_ 
+                (\priority -> execute db insertKanjiPriority $ KanjiRow priority entryId kElem_idx) 
+                (P.kanjiPriority kElem)
+        )
+        (Prelude.zip (P.kanjiElements entry) [1..])
 
     -- Insert reading elements
     mapM_ (\r -> execute db insertReading $
