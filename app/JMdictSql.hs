@@ -40,13 +40,40 @@ createTableKanjiPriority = Query $ T.pack "\
     \    FOREIGN KEY(entry_seq, kanji_text_no) REFERENCES kanji(entry_seq, kanji_text_no)\
     \);"
 
-createTableReading :: Query
-createTableReading = Query $ T.pack "\
+createTableReadingElement :: Query
+createTableReadingElement = Query $ T.pack "\
     \CREATE TABLE IF NOT EXISTS reading (\
     \    reading_text TEXT NOT NULL,\
-    \    entry_id INTEGER NOT NULL,\
     \    no_kanji BOOLEAN NOT NULL,\
-    \    FOREIGN KEY(entry_id) REFERENCES entry(seq_id)\
+    \    entry_seq INTEGER NOT NULL,\
+    \    reading_text_no INTEGER NOT NULL\
+    \);"
+
+createTableReadingRestriction :: Query
+createTableReadingRestriction = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS reading_restriction (\
+    \    restriction_text TEXT NOT NULL,\
+    \    reading_text_no INTEGER NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, reading_text_no) REFERENCES reading(entry_seq, reading_text_no)\
+    \);"
+
+createTableReadingInfo :: Query
+createTableReadingInfo = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS reading_info (\
+    \    info_text TEXT NOT NULL,\
+    \    reading_text_no INTEGER NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, reading_text_no) REFERENCES reading(entry_seq, reading_text_no)\
+    \);"
+
+createTableReadingPriority :: Query
+createTableReadingPriority = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS reading_priority (\
+    \    priority_text TEXT NOT NULL,\
+    \    reading_text_no INTEGER NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, reading_text_no) REFERENCES reading(entry_seq, reading_text_no)\
     \);"
 
 createTableSense :: Query
@@ -96,9 +123,24 @@ insertKanjiPriority = Query "\
     \INSERT INTO kanji_priority (priority_text, entry_seq, kanji_text_no) \
     \VALUES (?, ?, ?);"
 
-insertReading :: Query
-insertReading = Query "\
-    \INSERT INTO reading (reading_text, entry_id, no_kanji) \
+insertReadingElement :: Query
+insertReadingElement = Query "\
+    \INSERT INTO reading (reading_text, entry_seq, no_kanji, reading_text_no) \
+    \VALUES (?, ?, ?, ?);"
+
+insertReadingRestriction :: Query
+insertReadingRestriction = Query "\
+    \INSERT INTO reading_restriction (restriction_text, entry_seq, reading_text_no) \
+    \VALUES (?, ?, ?);"
+
+insertReadingInfo :: Query
+insertReadingInfo = Query "\
+    \INSERT INTO reading_info (info_text, entry_seq, reading_text_no) \
+    \VALUES (?, ?, ?);"
+
+insertReadingPriority :: Query
+insertReadingPriority = Query "\
+    \INSERT INTO reading_priority (priority_text, entry_seq, reading_text_no) \
     \VALUES (?, ?, ?);"
 
 insertSense :: Query
@@ -125,10 +167,10 @@ data KanjiRow = KanjiRow Text Int Int
 instance ToRow KanjiRow where
     toRow (KanjiRow kanji entrySeqInt kanjiTextNo) = toRow (kanji, entrySeqInt, kanjiTextNo)
 
-data ReadingRow = ReadingRow Text Int Bool
+data ReadingRow = ReadingRow Text Bool Int Int
 instance ToRow ReadingRow where
-    toRow (ReadingRow reading entryId noKanji) =
-        toRow (reading, entryId, noKanji)
+    toRow (ReadingRow reading noKanji entrySeqInt readingNo ) =
+        toRow (reading, noKanji, entrySeqInt, readingNo)
 
 data GlossRow = GlossRow Int P.Gloss
 instance ToRow GlossRow where
@@ -148,11 +190,14 @@ runJMdictSql dbName entries = do
     db <- open dbName
 
     -- Create tables
-    execute_ db createTableEntry
+    execute_ db createTableEntry -- to delete
     execute_ db createTableKanjiElement
     execute_ db createTableKanjiPriority
     execute_ db createTableKanjiInfo
-    execute_ db createTableReading
+    execute_ db createTableReadingElement
+    execute_ db createTableReadingRestriction
+    execute_ db createTableReadingInfo
+    execute_ db createTableReadingPriority
     execute_ db createTableSense
     execute_ db createTableGloss
     execute_ db createTableExample
@@ -185,9 +230,23 @@ insertEntryData db entry = do
         (Prelude.zip (P.kanjiElements entry) [1..])
 
     -- Insert reading elements
-    mapM_ (\r -> execute db insertReading $
-           ReadingRow (P.readingText r) entryId (P.readingNoKanji r))
-           (P.readingElements entry)
+    -- mapM_ (\r -> execute db insertReading $
+    --        ReadingRow (P.readingText r) entryId (P.readingNoKanji r))
+    --        (P.readingElements entry)
+    mapM_ 
+        (\(rElem, rElem_idx) -> do
+            execute db insertReadingElement $ ReadingRow (P.readingText rElem) (P.readingNoKanji rElem) entryId rElem_idx
+            mapM_ 
+                (\restriction -> execute db insertReadingRestriction $ KanjiRow restriction entryId rElem_idx) 
+                (P.readingRestrictions rElem)
+            mapM_ 
+                (\info -> execute db insertReadingInfo $ KanjiRow info entryId rElem_idx) 
+                (P.readingInfo rElem)
+            mapM_ 
+                (\priority -> execute db insertReadingPriority $ KanjiRow priority entryId rElem_idx) 
+                (P.readingPriority rElem)
+        )
+        (Prelude.zip (P.readingElements entry) [1..])
 
     -- Insert senses and their related data
     mapM_ (insertSenseData db entryId) (P.senses entry)
