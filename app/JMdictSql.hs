@@ -5,15 +5,9 @@ module JMdictSql where
 import qualified JMdictParser as P
 import Database.SQLite.Simple
 import Data.Text as T
-import Control.Monad
 
 -- SQL table creation commands
-createTableEntry :: Query
-createTableEntry = Query $ T.pack "\
-    \CREATE TABLE IF NOT EXISTS entry (\
-    \    seq_id INTEGER PRIMARY KEY\
-    \);"
-
+-- Kanji
 createTableKanjiElement :: Query
 createTableKanjiElement = Query $ T.pack "\
     \CREATE TABLE IF NOT EXISTS kanji (\
@@ -40,6 +34,7 @@ createTableKanjiPriority = Query $ T.pack "\
     \    FOREIGN KEY(entry_seq, kanji_text_no) REFERENCES kanji(entry_seq, kanji_text_no)\
     \);"
 
+-- Reading
 createTableReadingElement :: Query
 createTableReadingElement = Query $ T.pack "\
     \CREATE TABLE IF NOT EXISTS reading (\
@@ -76,40 +71,125 @@ createTableReadingPriority = Query $ T.pack "\
     \    FOREIGN KEY(entry_seq, reading_text_no) REFERENCES reading(entry_seq, reading_text_no)\
     \);"
 
+-- Sense
 createTableSense :: Query
 createTableSense = Query $ T.pack "\
     \CREATE TABLE IF NOT EXISTS sense (\
-    \    sense_id INTEGER PRIMARY KEY AUTOINCREMENT,\
-    \    entry_id INTEGER NOT NULL,\
-    \    FOREIGN KEY(entry_id) REFERENCES entry(seq_id)\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL\
     \);"
 
-createTableGloss :: Query
-createTableGloss = Query $ T.pack "\
-    \CREATE TABLE IF NOT EXISTS gloss (\
-    \    sense_id INTEGER NOT NULL,\
+createTableSenseRestriction :: Query
+createTableSenseRestriction = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS sense_restriction (\
+    \    restriction_text TEXT NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
+    \);"
+
+createTableXRef :: Query
+createTableXRef = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS sense_xref (\
+    \    xref_text TEXT NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
+    \);"
+
+createTableSenseAntonym :: Query
+createTableSenseAntonym = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS sense_antonym (\
+    \    antonym_text TEXT NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
+    \);"
+
+createTableSensePartOfSpeech :: Query
+createTableSensePartOfSpeech = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS sense_part_of_speech (\
+    \    pos_text TEXT NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
+    \);"
+
+createTableSenseField :: Query
+createTableSenseField = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS sense_field (\
+    \    field_text TEXT NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
+    \);"
+
+createTableSenseMisc :: Query
+createTableSenseMisc = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS sense_misc (\
+    \    misc_text TEXT NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
+    \);"
+
+createTableLanguageSource :: Query
+createTableLanguageSource = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS sense_language_source (\
+    \    lang_source TEXT NOT NULL,\
+    \    lang_type TEXT,\
+    \    lang_wasei INTEGER NOT NULL,\
+    \    lang_text TEXT,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
+    \);"
+
+createTableSenseDialectInfo :: Query
+createTableSenseDialectInfo = Query $ T.pack "\ 
+    \CREATE TABLE IF NOT EXISTS sense_dialect_info (\
+    \    dialect_text TEXT NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
+    \);"
+
+createTableSenseGloss :: Query
+createTableSenseGloss = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS sense_gloss (\
+    \    gloss_lang TEXT,\
+    \    gloss_gender TEXT,\
+    \    gloss_type TEXT,\
     \    gloss_text TEXT NOT NULL,\
-    \    lang TEXT,\
-    \    g_type TEXT,\
-    \    g_gend TEXT,\
-    \    FOREIGN KEY(sense_id) REFERENCES sense(sense_id)\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
     \);"
 
-createTableExample :: Query
-createTableExample = Query $ T.pack "\
-    \CREATE TABLE IF NOT EXISTS example (\
-    \    sense_id INTEGER NOT NULL,\
+createTableSenseInfo :: Query
+createTableSenseInfo = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS sense_info (\
+    \    info_text TEXT NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
+    \);"
+
+createTableSenseExample :: Query
+createTableSenseExample = Query $ T.pack "\
+    \CREATE TABLE IF NOT EXISTS sense_example (\
     \    japanese TEXT NOT NULL,\
     \    english TEXT NOT NULL,\
-    \    source TEXT,\
-    \    source_type TEXT,\
-    \    FOREIGN KEY(sense_id) REFERENCES sense(sense_id)\
+    \    source_type TEXT NOT NULL,\
+    \    source_ref TEXT NOT NULL,\
+    \    source_text TEXT NOT NULL,\
+    \    entry_seq INTEGER NOT NULL,\
+    \    sense_no INTEGER NOT NULL,\
+    \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
     \);"
 
 -- Insert commands
-insertEntry :: Query
-insertEntry = Query "INSERT INTO entry (seq_id) VALUES (?);"
-
+-- Kanji
 insertKanji :: Query
 insertKanji = Query "INSERT INTO kanji (kanji_text, entry_seq, kanji_text_no) VALUES (?, ?, ?);"
 
@@ -123,6 +203,7 @@ insertKanjiPriority = Query "\
     \INSERT INTO kanji_priority (priority_text, entry_seq, kanji_text_no) \
     \VALUES (?, ?, ?);"
 
+-- Reading
 insertReadingElement :: Query
 insertReadingElement = Query "\
     \INSERT INTO reading (reading_text, entry_seq, no_kanji, reading_text_no) \
@@ -143,20 +224,66 @@ insertReadingPriority = Query "\
     \INSERT INTO reading_priority (priority_text, entry_seq, reading_text_no) \
     \VALUES (?, ?, ?);"
 
+-- Sense
 insertSense :: Query
 insertSense = Query "\
-    \INSERT INTO sense (entry_id) \
-    \VALUES (?);"
+    \INSERT INTO sense (entry_seq, sense_no) \
+    \VALUES (?, ?);"
 
-insertGloss :: Query
-insertGloss = Query "\
-    \INSERT INTO gloss (sense_id, gloss_text, lang, g_type, g_gend) \
-    \VALUES (?, ?, ?, ?, ?);"
+insertSenseRestriction :: Query
+insertSenseRestriction = Query "\
+    \INSERT INTO sense_restriction (restriction_text, entry_seq, sense_no) \
+    \VALUES (?, ?, ?);"
 
-insertExample :: Query
-insertExample = Query "\
-    \INSERT INTO example (sense_id, japanese, english, source, source_type) \
-    \VALUES (?, ?, ?, ?, ?);"
+insertSenseXref :: Query
+insertSenseXref = Query "\
+    \INSERT INTO sense_xref (xref_text, entry_seq, sense_no) \
+    \VALUES (?, ?, ?);"
+
+insertSenseAntonym :: Query
+insertSenseAntonym = Query "\
+    \INSERT INTO sense_antonym (antonym_text, entry_seq, sense_no) \
+    \VALUES (?, ?, ?);"
+
+insertSensePartOfSpeech :: Query
+insertSensePartOfSpeech = Query "\
+    \INSERT INTO sense_part_of_speech (pos_text, entry_seq, sense_no) \
+    \VALUES (?, ?, ?);"
+
+insertSenseField :: Query
+insertSenseField = Query "\
+    \INSERT INTO sense_field (field_text, entry_seq, sense_no) \
+    \VALUES (?, ?, ?);"
+
+insertSenseMisc :: Query
+insertSenseMisc = Query "\
+    \INSERT INTO sense_misc (misc_text, entry_seq, sense_no) \
+    \VALUES (?, ?, ?);"
+
+insertSenseLanguageSource :: Query
+insertSenseLanguageSource = Query "\
+    \INSERT INTO sense_language_source (lang_source, lang_type, lang_wasei, lang_text, entry_seq, sense_no) \
+    \VALUES (?, ?, ?, ?, ?, ?);"
+
+insertSenseDialectInfo :: Query
+insertSenseDialectInfo = Query "\
+    \INSERT INTO sense_dialect_info (dialect_text, entry_seq, sense_no) \
+    \VALUES (?, ?, ?);"
+
+insertSenseGloss :: Query
+insertSenseGloss = Query "\
+    \INSERT INTO sense_gloss (gloss_lang, gloss_gender, gloss_type, gloss_text, entry_seq, sense_no) \
+    \VALUES (?, ?, ?, ?, ?, ?);"
+
+insertSenseInfo :: Query
+insertSenseInfo = Query "\
+    \INSERT INTO sense_info (info_text, entry_seq, sense_no) \
+    \VALUES (?, ?, ?);"
+
+insertSenseExample :: Query
+insertSenseExample = Query "\
+    \INSERT INTO sense_example (japanese, english, source_type, source_ref, source_text, entry_seq, sense_no) \
+    \VALUES (?, ?, ?, ?, ?, ?, ?);"
 
 -- Helper functions to convert from Parser types to SQL rows
 newtype EntryRow = EntryRow P.JMdictEntry
@@ -190,17 +317,28 @@ runJMdictSql dbName entries = do
     db <- open dbName
 
     -- Create tables
-    execute_ db createTableEntry -- to delete
+    -- Kanji
     execute_ db createTableKanjiElement
     execute_ db createTableKanjiPriority
     execute_ db createTableKanjiInfo
+    -- Reading
     execute_ db createTableReadingElement
     execute_ db createTableReadingRestriction
     execute_ db createTableReadingInfo
     execute_ db createTableReadingPriority
+    -- Sense
     execute_ db createTableSense
-    execute_ db createTableGloss
-    execute_ db createTableExample
+    execute_ db createTableSenseRestriction
+    execute_ db createTableXRef
+    execute_ db createTableSenseAntonym
+    execute_ db createTableSensePartOfSpeech
+    execute_ db createTableSenseField
+    execute_ db createTableSenseMisc
+    execute_ db createTableLanguageSource
+    execute_ db createTableSenseDialectInfo
+    execute_ db createTableSenseGloss
+    execute_ db createTableSenseInfo
+    execute_ db createTableSenseExample
 
     -- Insert entries and their related data
     mapM_ (insertEntryData db) entries
@@ -209,14 +347,8 @@ runJMdictSql dbName entries = do
 
 insertEntryData :: Connection -> P.JMdictEntry -> IO ()
 insertEntryData db entry = do
-    -- Insert main entry
-    execute db insertEntry (EntryRow entry)
     let entryId = P.entrySeq entry
-
-    -- Insert kanji elements
-    -- mapM_ (\k -> execute db insertKanji $
-    --        KanjiRow (P.kanjiText k) entryId)
-    --        (P.kanjiElements entry)
+    -- Kanji
     mapM_ 
         (\(kElem, kElem_idx) -> do
             execute db insertKanji $ KanjiRow (P.kanjiText kElem) entryId kElem_idx
@@ -228,11 +360,7 @@ insertEntryData db entry = do
                 (P.kanjiPriority kElem)
         )
         (Prelude.zip (P.kanjiElements entry) [1..])
-
-    -- Insert reading elements
-    -- mapM_ (\r -> execute db insertReading $
-    --        ReadingRow (P.readingText r) entryId (P.readingNoKanji r))
-    --        (P.readingElements entry)
+    -- Readings
     mapM_ 
         (\(rElem, rElem_idx) -> do
             execute db insertReadingElement $ ReadingRow (P.readingText rElem) (P.readingNoKanji rElem) entryId rElem_idx
@@ -247,20 +375,58 @@ insertEntryData db entry = do
                 (P.readingPriority rElem)
         )
         (Prelude.zip (P.readingElements entry) [1..])
-
-    -- Insert senses and their related data
-    mapM_ (insertSenseData db entryId) (P.senses entry)
-
-insertSenseData :: Connection -> Int -> P.Sense -> IO ()
-insertSenseData db entryId sense = do
-    -- Insert sense and get its ID
-    execute db insertSense (Only entryId)
-    [Only senseId] <- query_ db "SELECT last_insert_rowid()" :: IO [Only Int]
-
-    -- Insert glosses
-    mapM_ (execute db insertGloss . GlossRow senseId)
-           (P.glosses sense)
-
-    -- Insert examples
-    mapM_ (execute db insertExample . ExampleRow senseId)
-           (P.example sense)
+    -- Sense
+    mapM_ 
+        (\(sense, sense_idx) -> do
+            execute db insertSense (entryId, sense_idx)
+            mapM_ 
+                (\restriction -> execute db insertSenseRestriction (restriction, entryId, sense_idx)) 
+                (P.senseRestrictions sense)
+            mapM_ 
+                (\xref -> execute db insertSenseXref (xref, entryId, sense_idx))
+                (P.crossReferences sense)
+            mapM_ 
+                (\antonym -> execute db insertSenseAntonym (antonym, entryId, sense_idx))  
+                (P.antonyms sense)
+            mapM_ 
+                (\pos -> execute db insertSensePartOfSpeech (pos, entryId, sense_idx))
+                (P.partOfSpeech sense)
+            mapM_ 
+                (\field' -> execute db insertSenseField (field', entryId, sense_idx))
+                (P.fields sense)
+            mapM_ 
+                (\misc -> execute db insertSenseMisc (misc, entryId, sense_idx))
+                (P.miscInfo sense)
+            mapM_ 
+                (\langSrc -> execute db insertSenseLanguageSource 
+                    (P.lsLang langSrc, 
+                     P.lsType langSrc, 
+                     P.lsWasei langSrc, 
+                     P.lsText langSrc,
+                     entryId, sense_idx))
+                (P.languageSources sense)
+            mapM_ 
+                (\dialect -> execute db insertSenseDialectInfo (dialect, entryId, sense_idx))  
+                (P.dialectInfo sense)
+            mapM_ 
+                (\gloss -> execute db insertSenseGloss 
+                    (P.glossLang gloss, 
+                     P.glossGender gloss, 
+                     P.glossType gloss, 
+                     P.glossText gloss,
+                     entryId, sense_idx))
+                (P.glosses sense)
+            mapM_ 
+                (\info -> execute db insertSenseInfo (info, entryId, sense_idx))  
+                (P.senseInfo sense)
+            mapM_ 
+                (\ex -> execute db insertSenseExample 
+                    (P.exampleJapanese ex, 
+                     P.exampleEnglish ex, 
+                     P.exampleSourceType ex, 
+                     P.exampleSource ex, 
+                     P.exampleText ex,
+                     entryId, sense_idx))
+                (P.example sense)
+        ) 
+        (Prelude.zip (P.senses entry) ([1..]::[Int]))

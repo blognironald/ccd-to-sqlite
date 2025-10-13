@@ -266,7 +266,7 @@ prettyPrintEntryDetailed entry = T.unlines $
     ] <> concatMap printReadingElement (readingElements entry) <>
     [ ""
     , "=== Senses ==="
-    ] <> concatMap (printSense 1) (senses entry)
+    ] <> concatMap printSense (senses entry)
   where
     printKanjiElement k =
       [ "  Kanji: " <> kanjiText k
@@ -284,8 +284,8 @@ prettyPrintEntryDetailed entry = T.unlines $
       , ""
       ]
 
-    printSense n s =
-      [ "  Sense #" <> T.pack (show n) <> ":"
+    printSense s =
+      [ "  Sense" <> ":"
       , "    Restrictions: " <> formatList (senseRestrictions s)
       , "    Cross References: " <> formatList (crossReferences s)
       , "    Antonyms: " <> formatList (antonyms s)
@@ -304,17 +304,17 @@ prettyPrintEntryDetailed entry = T.unlines $
 
     printLangSource ls =
       [ "Language: " <> lsLang ls
-      , "Type: " <> maybe "None" id (lsType ls)
+      , "Type: " <> fromMaybe "None" (lsType ls)
       , "Wasei: " <> T.pack (show $ lsWasei ls)
-      , "Text: " <> maybe "None" id (lsText ls)
+      , "Text: " <> fromMaybe "None" (lsText ls)
       , ""
       ]
 
     printGloss g =
       [ "Text: " <> glossText g
-      , "Language: " <> maybe "eng" id (glossLang g)
-      , "Gender: " <> maybe "None" id (glossGender g)
-      , "Type: " <> maybe "None" id (glossType g)
+      , "Language: " <> fromMaybe "eng" (glossLang g)
+      , "Gender: " <> fromMaybe "None" (glossGender g)
+      , "Type: " <> fromMaybe "None" (glossType g)
       , ""
       ]
 
