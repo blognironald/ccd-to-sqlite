@@ -92,6 +92,7 @@ createTableXRef :: Query
 createTableXRef = Query $ T.pack "\
     \CREATE TABLE IF NOT EXISTS sense_xref (\
     \    xref_text TEXT NOT NULL,\
+    \    xref_sense_no INTEGER,\
     \    entry_seq INTEGER NOT NULL,\
     \    sense_no INTEGER NOT NULL,\
     \    FOREIGN KEY(entry_seq, sense_no) REFERENCES sense(entry_seq, sense_no)\
@@ -237,8 +238,8 @@ insertSenseRestriction = Query "\
 
 insertSenseXref :: Query
 insertSenseXref = Query "\
-    \INSERT INTO sense_xref (xref_text, entry_seq, sense_no) \
-    \VALUES (?, ?, ?);"
+    \INSERT INTO sense_xref (xref_text, xref_sense_no, entry_seq, sense_no) \
+    \VALUES (?, ?, ?, ?);"
 
 insertSenseAntonym :: Query
 insertSenseAntonym = Query "\
@@ -383,7 +384,10 @@ insertEntryData db entry = do
                 (\restriction -> execute db insertSenseRestriction (restriction, entryId, sense_idx)) 
                 (P.senseRestrictions sense)
             mapM_ 
-                (\xref -> execute db insertSenseXref (xref, entryId, sense_idx))
+                (\xref -> execute db insertSenseXref 
+                    (P.crefText xref, 
+                    P.crefSenseNo xref, 
+                    entryId, sense_idx))
                 (P.crossReferences sense)
             mapM_ 
                 (\antonym -> execute db insertSenseAntonym (antonym, entryId, sense_idx))  

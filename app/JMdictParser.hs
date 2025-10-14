@@ -12,6 +12,7 @@ import Data.Maybe
 -- import Data.List (find)
 
 import Control.Exception (try)
+import Text.Read (readMaybe)
 
 -- | Main JMdict entry structure
 data JMdictEntry = JMdictEntry
@@ -40,7 +41,7 @@ data ReadingElement = ReadingElement
 -- | Sense (meaning/translation)
 data Sense = Sense
   { senseRestrictions :: ![Text]        -- ^ Kanji/reading restrictions
-  , crossReferences :: ![Text]          -- ^ Cross-references to other entries
+  , crossReferences :: ![CrossReferences]          -- ^ Cross-references to other entries
   , antonyms :: ![Text]                 -- ^ Antonym references
   , partOfSpeech :: ![Text]             -- ^ Parts of speech
   , fields :: ![Text]                   -- ^ Field of application
@@ -52,6 +53,10 @@ data Sense = Sense
   , example :: ![Example]             -- ^ Examples
   } deriving (Show, Eq)
 
+data CrossReferences = CrossReferences
+  { crefText :: !Text                    
+  , crefSenseNo :: !(Maybe Int)                   
+  } deriving (Show, Eq)
 -- | Translation gloss
 data Gloss = Gloss
   { glossLang :: !(Maybe Text)          -- ^ Language code (default: eng)
@@ -139,7 +144,7 @@ parseSenses cursor =
 parseSense :: Cursor -> Sense
 parseSense cursor = Sense
   { senseRestrictions = getMultipleContent cursor "stagr" ++ getMultipleContent cursor "stagk"
-  , crossReferences = getMultipleContent cursor "xref"
+  , crossReferences = parseCrossReferences cursor -- getMultipleContent cursor "xref"
   , antonyms = getMultipleContent cursor "ant"
   , partOfSpeech = getMultipleContent cursor "pos"
   , fields = getMultipleContent cursor "field"
@@ -150,6 +155,16 @@ parseSense cursor = Sense
   , languageSources = parseLanguageSources cursor
   , example = parseExamples cursor
   }
+
+parseCrossReferences :: Cursor -> [CrossReferences]
+parseCrossReferences cursor =
+  map 
+    (\xRefText -> 
+      case T.splitOn "・" xRefText of
+      [text, numText] -> CrossReferences text (readMaybe (T.unpack numText))
+      _ -> CrossReferences xRefText Nothing
+    ) 
+    (getMultipleContent cursor "xref")
 
 -- | Parse gloss elements
 parseGlosses :: Cursor -> [Gloss]
@@ -287,8 +302,9 @@ prettyPrintEntryDetailed entry = T.unlines $
     printSense s =
       [ "  Sense" <> ":"
       , "    Restrictions: " <> formatList (senseRestrictions s)
-      , "    Cross References: " <> formatList (crossReferences s)
-      , "    Antonyms: " <> formatList (antonyms s)
+      , "    Cross References: "
+      ] <> map ("      " <>) (concatMap printXRef (crossReferences s)) <>
+      [ "    Antonyms: " <> formatList (antonyms s)
       , "    Parts of Speech: " <> formatList (partOfSpeech s)
       , "    Fields: " <> formatList (fields s)
       , "    Misc Info: " <> formatList (miscInfo s)
@@ -301,7 +317,11 @@ prettyPrintEntryDetailed entry = T.unlines $
       [ "    Examples:"
       ] <> map ("      " <>) (concatMap printExample (example s)) <>
       [""]
-
+    printXRef xRef =
+      [ "Text: " <> crefText xRef
+      , "Sense No: " <> maybe "None" (T.pack . show) (crefSenseNo xRef)
+      , ""
+      ]
     printLangSource ls =
       [ "Language: " <> lsLang ls
       , "Type: " <> fromMaybe "None" (lsType ls)
@@ -340,12 +360,12 @@ exampleUsage = do
   putStrLn $ "Loaded " ++ show (length entries) ++ " entries"
 
   -- Search for entries containing "水"
-  let waterEntries = searchEntries "明白" entries
-  putStrLn $ "Found " ++ show (length waterEntries) ++ " entries for '明白'"
+  -- let waterEntries = searchEntries "明白" entries
+  -- putStrLn $ "Found " ++ show (length waterEntries) ++ " entries for '明白'"
 
   -- Print first few entries
   -- mapM_ (T.putStr . prettyPrintEntry) (take 3 waterEntries)
-  mapM_ (T.putStr . prettyPrintEntryDetailed) (take 3 waterEntries)
+  mapM_ (T.putStr . prettyPrintEntryDetailed) (take 3 entries)
 
 -- | Run the JMdict parser on a file
 runJMdictParser :: FilePath -> IO (Either String [JMdictEntry])
