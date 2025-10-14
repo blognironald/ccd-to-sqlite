@@ -83,8 +83,8 @@ data RMGroup = RMGroup
 data Reading = Reading
   { rType :: Text
   , rValue :: Text
-  , rOnType :: Maybe Text
-  , rRStatus :: Maybe Text
+  -- , rOnType :: Maybe Text
+  -- , rRStatus :: Maybe Text
   } deriving (Show, Eq)
 
 data Meaning = Meaning
@@ -220,8 +220,8 @@ parseReading :: Cursor -> Reading
 parseReading cursor = Reading
   { rType = getAttr "r_type" cursor
   , rValue = T.concat $ cursor $/ content
-  , rOnType = getAttrMaybe "on_type" cursor
-  , rRStatus = getAttrMaybe "r_status" cursor
+  -- , rOnType = getAttrMaybe "on_type" cursor
+  -- , rRStatus = getAttrMaybe "r_status" cursor
   }
 
 parseMeaning :: Cursor -> Meaning
@@ -397,8 +397,8 @@ prettyRMGroup group' =
 formatReading :: Reading -> Text
 formatReading r =
   let base = "    " <> rValue r
-      onType = maybe "" (\ot -> " [" <> ot <> "]") (rOnType r)
-      status = maybe "" (\st -> " (" <> st <> ")") (rRStatus r)
+      onType = "" -- maybe "" (\ot -> " [" <> ot <> "]") (rOnType r)
+      status = "" -- maybe "" (\st -> " (" <> st <> ")") (rRStatus r)
   in base <> onType <> status
 
 formatMeaning :: Meaning -> Text

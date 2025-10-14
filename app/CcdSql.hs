@@ -10,7 +10,7 @@ import Data.Maybe
 createTableCharacter :: Query
 createTableCharacter = 
     Query (T.pack "\
-        \CREATE TABLE IF NOT EXISTS character (\
+        \CREATE TABLE IF NOT EXISTS ccd_character (\
         \  character       TEXT PRIMARY KEY    \
         \, strokeCount     INTEGER             \
         \, compositionType TEXT                \
@@ -21,7 +21,7 @@ createTableCharacter =
 createTableComponent :: Query
 createTableComponent =
     Query (T.pack "\
-        \CREATE TABLE IF NOT EXISTS component (\
+        \CREATE TABLE IF NOT EXISTS ccd_component (\
         \  component  TEXT NOT NULL             \
         \, character  TEXT NOT NULL             \
         \, isFirst    INTEGER NOT NULL          \
@@ -32,7 +32,7 @@ createTableComponent =
 insertCharacter :: Query
 insertCharacter = 
     Query (T.pack "\
-        \INSERT INTO character (   \
+        \INSERT INTO ccd_character (   \
         \  character               \
         \, strokeCount             \
         \, compositionType         \
@@ -44,7 +44,7 @@ insertCharacter =
 insertComponent :: Query
 insertComponent = 
     Query(T.pack "\
-        \INSERT INTO component (   \
+        \INSERT INTO ccd_component (   \
         \  component               \
         \, character               \
         \, isFirst                 \
