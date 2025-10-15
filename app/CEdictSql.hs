@@ -17,23 +17,21 @@ createTables :: Connection -> IO ()
 createTables db = do
   -- Main CEDICT entries table
   execute_ db $ Query $ T.unwords
-    [ "CREATE TABLE IF NOT EXISTS cedict_entries ("
+    [ "CREATE TABLE IF NOT EXISTS ce_entry ("
     , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
     , "traditional TEXT NOT NULL,"
     , "simplified TEXT NOT NULL,"
-    , "pronunciation TEXT NOT NULL,"
-    , "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+    , "pronunciation TEXT NOT NULL"
     , ");"
     ]
 
   -- Meanings table (separate table for multiple meanings per entry)
   execute_ db $ Query $ T.unwords
-    [ "CREATE TABLE IF NOT EXISTS cedict_meanings ("
-    , "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-    , "entry_id INTEGER NOT NULL,"
+    [ "CREATE TABLE IF NOT EXISTS ce_meaning ("
+    , "id INTEGER NOT NULL,"
     , "meaning TEXT NOT NULL,"
-    , "meaning_order INTEGER NOT NULL DEFAULT 0,"
-    , "FOREIGN KEY (entry_id) REFERENCES cedict_entries(id) ON DELETE CASCADE"
+    , "meaning_order INTEGER NOT NULL DEFAULT 1,"
+    , "FOREIGN KEY (id) REFERENCES ce_entry(id) ON DELETE CASCADE"
     , ");"
     ]
 
@@ -42,11 +40,11 @@ createTables db = do
 
 createIndexes :: Connection -> IO ()
 createIndexes db = do
-  execute_ db "CREATE INDEX IF NOT EXISTS idx_cedict_traditional ON cedict_entries(traditional);"
-  execute_ db "CREATE INDEX IF NOT EXISTS idx_cedict_simplified ON cedict_entries(simplified);"
-  execute_ db "CREATE INDEX IF NOT EXISTS idx_cedict_pronunciation ON cedict_entries(pronunciation);"
-  execute_ db "CREATE INDEX IF NOT EXISTS idx_cedict_meanings_entry_id ON cedict_meanings(entry_id);"
-  execute_ db "CREATE INDEX IF NOT EXISTS idx_cedict_meanings_text ON cedict_meanings(meaning);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_cedict_traditional ON ce_entry(traditional);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_cedict_simplified ON ce_entry(simplified);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_cedict_pronunciation ON ce_entry(pronunciation);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_cedict_meanings_entry_id ON ce_meaning(id);"
+  execute_ db "CREATE INDEX IF NOT EXISTS idx_cedict_meanings_text ON ce_meaning(meaning);"
 
 -- Create optional full-text search tables
 createFtsTable :: Connection -> IO ()
@@ -61,19 +59,19 @@ createFtsTable db = do
 
   -- Create triggers to keep FTS synchronized
   execute_ db $ Query $ T.unwords
-    [ "CREATE TRIGGER IF NOT EXISTS cedict_meanings_fts_insert AFTER INSERT ON cedict_meanings BEGIN"
+    [ "CREATE TRIGGER IF NOT EXISTS cedict_meanings_fts_insert AFTER INSERT ON ce_meaning BEGIN"
     , "INSERT INTO cedict_meanings_fts(rowid, meaning) VALUES (new.id, new.meaning);"
     , "END;"
     ]
 
   execute_ db $ Query $ T.unwords
-    [ "CREATE TRIGGER IF NOT EXISTS cedict_meanings_fts_delete AFTER DELETE ON cedict_meanings BEGIN"
+    [ "CREATE TRIGGER IF NOT EXISTS cedict_meanings_fts_delete AFTER DELETE ON ce_meaning BEGIN"
     , "INSERT INTO cedict_meanings_fts(cedict_meanings_fts, rowid, meaning) VALUES('delete', old.id, old.meaning);"
     , "END;"
     ]
 
   execute_ db $ Query $ T.unwords
-    [ "CREATE TRIGGER IF NOT EXISTS cedict_meanings_fts_update AFTER UPDATE ON cedict_meanings BEGIN"
+    [ "CREATE TRIGGER IF NOT EXISTS cedict_meanings_fts_update AFTER UPDATE ON ce_meaning BEGIN"
     , "INSERT INTO cedict_meanings_fts(cedict_meanings_fts, rowid, meaning) VALUES('delete', old.id, old.meaning);"
     , "INSERT INTO cedict_meanings_fts(rowid, meaning) VALUES (new.id, new.meaning);"
     , "END;"
@@ -84,7 +82,7 @@ insertCedictEntry :: Connection -> CedictEntry -> IO Int
 insertCedictEntry db entry = do
   execute
     db
-    "INSERT INTO cedict_entries (traditional, simplified, pronunciation) VALUES (?, ?, ?);"
+    "INSERT INTO ce_entry (traditional, simplified, pronunciation) VALUES (?, ?, ?);"
     (ceTraditional entry, ceSimplified entry, cePronunciation entry)
   fromIntegral <$> lastInsertRowId db
 
@@ -94,7 +92,7 @@ insertMeanings db entryId meanings = do
   forM_ (zip [1..] meanings) $ \(order, meaning) -> do
     execute
       db
-      "INSERT INTO cedict_meanings (entry_id, meaning, meaning_order) VALUES (?, ?, ?);"
+      "INSERT INTO ce_meaning (id, meaning, meaning_order) VALUES (?, ?, ?);"
       (entryId, meaning, order::Int)
 
 
@@ -115,7 +113,7 @@ runCedictSql :: ConnectionPath -> [CedictEntry] -> IO ()
 runCedictSql dbName entries = do
   db <- initializeConnection dbName
   insertMultipleCedictEntries db entries
-  -- close db
+  close db
 
 -- Query functions
 
@@ -126,8 +124,8 @@ findByTraditional db traditional = do
             db
             ("SELECT e.id, e.traditional, e.simplified, e.pronunciation, " <>
             "GROUP_CONCAT(m.meaning, '|') as meanings " <>
-            "FROM cedict_entries e " <>
-            "LEFT JOIN cedict_meanings m ON e.id = m.entry_id " <>
+            "FROM ce_entry e " <>
+            "LEFT JOIN ce_meaning m ON e.id = m.entry_id " <>
             "WHERE e.traditional = ? " <>
             "GROUP BY e.id " <>
             "ORDER BY m.meaning_order;")

@@ -73,9 +73,9 @@ main = do
 
 runAll :: IO ()
 runAll = do
-    withArgs ["--op", "ccd",      "-iothers/ccd.txt"                      ] main
-    withArgs ["--op", "kanjidic", "-iothers/kanjidic2.xml"                ] main
-    withArgs ["--op", "cedict",   "-iothers/cedict_ts.u8"                 ] main
-    withArgs ["--op", "unihan",   "-iothers/Unihan_Readings.txt"          ] main
-    withArgs ["--op", "jmdict",   "-iothers/JMdict_e_examp.xml"           ] main
+    withArgs ["--op", "ccd",      "-iothers/ccd.txt"             , "-oothers/ccd.db3" ] main
+    withArgs ["--op", "kanjidic", "-iothers/kanjidic2.xml"       , "-oothers/kd.db3"  ] main
+    withArgs ["--op", "cedict",   "-iothers/cedict_ts.u8"        , "-oothers/cd.db3"  ] main
+    withArgs ["--op", "unihan",   "-iothers/Unihan_Readings.txt" , "-oothers/uni.db3" ] main
+    withArgs ["--op", "jmdict",   "-iothers/JMdict_e_examp.xml"  , "-oothers/jm.db3"  ] main
 
