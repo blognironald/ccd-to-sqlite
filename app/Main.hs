@@ -6,6 +6,8 @@ import System.Exit(die)
 -- import qualified Data.Text.IO as T
 import Data.Maybe
 import System.Environment (withArgs)
+import Data.Time.Clock
+import Text.Printf
 
 import CmdLineArgs
 import CcdParser
@@ -15,7 +17,7 @@ import CharToTagSql
 import KanjiDic2Parser
 import KanjiDic2Sql as KD
 import UnihanReadingsParser
-import UnihanReadingsSql 
+import UnihanReadingsSql
 import CEdictParser
 import CEdictSql
 import JMdictParser
@@ -31,6 +33,7 @@ import JMdictSql
 
 main :: IO ()
 main = do
+    start <- getCurrentTime
     args <- execParser opts
     case map toLower (operation args) of
         "ccd" -> do
@@ -68,14 +71,16 @@ main = do
                 Left err -> die err
                 Right entries -> do
                     runJMdictSql (output args) entries
+        "all" -> do
+            -- withArgs["--op","all","-irandom", "-oothers/master.db3"] main
+            let outfile = "-o" ++ output args
+            withArgs ["--op", "ccd",      "-iothers/ccd.txt"             , outfile ] main
+            withArgs ["--op", "kanjidic", "-iothers/kanjidic2.xml"       , outfile ] main
+            withArgs ["--op", "cedict",   "-iothers/cedict_ts.u8"        , outfile ] main
+            withArgs ["--op", "unihan",   "-iothers/Unihan_Readings.txt" , outfile ] main
+            withArgs ["--op", "jmdict",   "-iothers/JMdict_e_examp.xml"  , outfile ] main
         _     -> putStrLn $ "\nUnidentified operation: " ++ operation args ++ "\n"
-    putStrLn "\nDone!"
-
-runAll :: IO ()
-runAll = do
-    withArgs ["--op", "ccd",      "-iothers/ccd.txt"             , "-oothers/ccd.db3" ] main
-    withArgs ["--op", "kanjidic", "-iothers/kanjidic2.xml"       , "-oothers/kd.db3"  ] main
-    withArgs ["--op", "cedict",   "-iothers/cedict_ts.u8"        , "-oothers/cd.db3"  ] main
-    withArgs ["--op", "unihan",   "-iothers/Unihan_Readings.txt" , "-oothers/uni.db3" ] main
-    withArgs ["--op", "jmdict",   "-iothers/JMdict_e_examp.xml"  , "-oothers/jm.db3"  ] main
-
+    end <- getCurrentTime
+    let elapsed = diffUTCTime end start
+    printf "Elapsed: %.2f minutes\n" ((realToFrac elapsed/60) :: Double)
+    putStrLn "Done!"

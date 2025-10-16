@@ -91,6 +91,7 @@ executable ccd-to-sqlite
                     , containers
                     , pretty-tree
                     , xml-conduit
+                    , time
 
     -- Directories containing source files.
     hs-source-dirs:   app
