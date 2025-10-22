@@ -55,7 +55,9 @@ extra-doc-files:    CHANGELOG.md
 common warnings
     ghc-options: 
         -Wall 
-        +RTS --io-manager=native -RTS
+        -threaded
+        -- +RTS --io-manager=native -RTS
+        -- -threaded
         -- -threaded -rtsopts -with-rtsopts=--io-manager=native
 
 executable ccd-to-sqlite
